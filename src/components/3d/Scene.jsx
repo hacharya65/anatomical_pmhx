@@ -10,21 +10,14 @@ import { RotateCcw, Lock, Unlock, X } from "lucide-react";
 import { isItemRelevantForPerspective } from "../../lib/clinicalCatalog";
 
 /**
- * Camera Rig maintaining stable overview framing without groin fly-through.
- * - Supports complete view lock (disables both avatar spin rotation AND zoom)
- * - Continuously monitors viewing angle relative to avatar to dynamically surface
- *   posterior/anterior clinical history when orbiting manually.
- * - Provides instant 1-click baseline zoom reset.
+ * Camera Rig maintaining stable overview framing.
+ * - Camera is locked in orientation so room fixtures (pharmacy shelf, medications) remain stationary.
+ * - Supports zoom in/out when view lock is disabled.
+ * - Instant 1-click baseline zoom reset.
  */
-function CameraRig({
-  resetTrigger,
-  isLocked = true,
-  turntableAngleRef,
-  onFacingChange
-}) {
+function CameraRig({ resetTrigger, isLocked = true }) {
   const controlsRef = useRef();
   const { camera } = useThree();
-  const currentFacingRef = useRef("anterior");
 
   useEffect(() => {
     if (controlsRef.current) {
@@ -36,66 +29,66 @@ function CameraRig({
     }
   }, [resetTrigger, camera]);
 
-  // Continuously evaluate camera azimuth relative to avatar rotation
-  useFrame(() => {
-    if (!controlsRef.current) return;
-    const camAzimuth = Math.atan2(camera.position.x, camera.position.z);
-    const turntableAngle = (turntableAngleRef && turntableAngleRef.current) || 0;
-    const relAngle = camAzimuth - turntableAngle;
-    const cosVal = Math.cos(relAngle);
-
-    // Hysteresis: switch to posterior when cos < -0.15, switch to anterior when cos > 0.15
-    let detected = currentFacingRef.current;
-    if (cosVal < -0.15) {
-      detected = "posterior";
-    } else if (cosVal > 0.15) {
-      detected = "anterior";
-    }
-
-    if (detected !== currentFacingRef.current) {
-      currentFacingRef.current = detected;
-      if (onFacingChange) {
-        onFacingChange(detected);
-      }
-    }
-  });
-
   return (
     <OrbitControls
       ref={controlsRef}
       enableDamping={true}
       dampingFactor={0.06}
-      enableRotate={!isLocked}
+      enableRotate={false}
+      enablePan={false}
       enableZoom={!isLocked}
       minDistance={14}
       maxDistance={38}
       target={[0, -0.5, 0]}
-      maxPolarAngle={Math.PI - 0.05}
-      minPolarAngle={0.05}
     />
   );
 }
 
 /**
  * Smooth 3D Turntable for the Anatomical Avatar
- * Delivers an authentic, graceful slow rotation around Y (0 for Anterior, Math.PI for Posterior)
- * Completely eliminates camera groin fly-through
+ * - Rotation is strictly limited to the avatar, its organs, and body markers.
+ * - Smooth damped rotation around Y axis.
+ * - Dynamically evaluates front vs rear facing without any feedback loop glitching.
  */
-function AvatarTurntable({ perspective = "anterior", turntableAngleRef, children }) {
+function AvatarTurntable({
+  targetRotationYRef,
+  turntableAngleRef,
+  onFacingDetected,
+  children
+}) {
   const groupRef = useRef();
-  const targetAngle = perspective === "posterior" ? Math.PI : 0;
+  const facingRef = useRef("anterior");
 
   useFrame((_, delta) => {
-    if (groupRef.current) {
+    if (groupRef.current && targetRotationYRef) {
       const current = groupRef.current.rotation.y;
-      const diff = targetAngle - current;
-      if (Math.abs(diff) > 0.001) {
-        groupRef.current.rotation.y += diff * Math.min(1, delta * 4.8);
+      const target = targetRotationYRef.current;
+      const diff = target - current;
+
+      if (Math.abs(diff) > 0.0005) {
+        groupRef.current.rotation.y += diff * Math.min(1, delta * 9);
       } else {
-        groupRef.current.rotation.y = targetAngle;
+        groupRef.current.rotation.y = target;
       }
+
       if (turntableAngleRef) {
         turntableAngleRef.current = groupRef.current.rotation.y;
+      }
+
+      // Evaluate whether Anterior or Posterior is facing camera (Camera is at +Z looking towards origin)
+      const cosVal = Math.cos(groupRef.current.rotation.y);
+      let detected = facingRef.current;
+      if (cosVal < -0.18) {
+        detected = "posterior";
+      } else if (cosVal > 0.18) {
+        detected = "anterior";
+      }
+
+      if (detected !== facingRef.current) {
+        facingRef.current = detected;
+        if (onFacingDetected) {
+          onFacingDetected(detected);
+        }
       }
     }
   });
@@ -126,24 +119,38 @@ export function Scene({
   const isDeepDive = !!focusedItem;
   const bgColor = "#f0f5f4";
 
-  // Turntable angle ref & dynamic camera facing perspective
+  // Turntable angle & rotation target refs for avatar-only rotation
+  const targetRotationYRef = useRef(perspective === "posterior" ? Math.PI : 0);
   const turntableAngleRef = useRef(perspective === "posterior" ? Math.PI : 0);
   const [facingPerspective, setFacingPerspective] = useState(perspective);
 
   // Sync facing perspective when perspective prop changes externally (e.g. from buttons or deep dives)
   useEffect(() => {
+    if (targetRotationYRef.current !== undefined) {
+      const cosVal = Math.cos(targetRotationYRef.current);
+      const currentFacing = cosVal >= 0 ? "anterior" : "posterior";
+      if (currentFacing !== perspective) {
+        if (perspective === "posterior") {
+          const k = Math.round((targetRotationYRef.current - Math.PI) / (2 * Math.PI));
+          targetRotationYRef.current = k * 2 * Math.PI + Math.PI;
+        } else {
+          const k = Math.round(targetRotationYRef.current / (2 * Math.PI));
+          targetRotationYRef.current = k * 2 * Math.PI;
+        }
+      }
+    }
     setFacingPerspective(perspective);
   }, [perspective]);
 
-  const handleFacingChange = (newFacing) => {
-    setFacingPerspective(newFacing);
-    if (onPerspectiveChange && newFacing !== perspective) {
-      onPerspectiveChange(newFacing);
+  const handleFacingDetected = (detected) => {
+    setFacingPerspective(detected);
+    if (onPerspectiveChange && detected !== perspective) {
+      onPerspectiveChange(detected);
     }
   };
 
   // Filter items dynamically based on the actual side facing the camera (Anterior vs Posterior)
-  // When user manually orbits to the back, facingPerspective flips to "posterior",
+  // When user manually spins the avatar to the back, facingPerspective flips to "posterior",
   // immediately rendering L3-L4 Laminectomy, spinal fusion, and other posterior items!
   const visibleConditions = useMemo(
     () => conditions.filter((c) => isItemRelevantForPerspective(c, facingPerspective)),
@@ -189,29 +196,63 @@ export function Scene({
 
   const handleResetZoom = () => {
     setResetCameraTrigger((c) => c + 1);
+    if (perspective === "posterior") {
+      targetRotationYRef.current = Math.PI;
+    } else {
+      targetRotationYRef.current = 0;
+    }
   };
 
   useEffect(() => {
     setHoveredItem(null);
   }, [perspective, focusedItem]);
 
-  // Click-outside detection: Track pointer down/up to distinguish clicks from camera drags
+  // Drag-to-spin avatar state (strictly limited to avatar only, does NOT move pharmacy shelf or background)
+  const isDraggingRef = useRef(false);
+  const lastPointerXRef = useRef(0);
   const pointerDownPos = useRef({ x: 0, y: 0, time: 0 });
 
   const handlePointerDown = (e) => {
+    if (
+      e.target &&
+      e.target.closest &&
+      (e.target.closest("button") || e.target.closest(".interactive-card") || e.target.closest("input"))
+    ) {
+      return;
+    }
     pointerDownPos.current = {
       x: e.clientX,
       y: e.clientY,
       time: Date.now()
     };
+    if (!isLocked) {
+      isDraggingRef.current = true;
+      lastPointerXRef.current = e.clientX;
+      try {
+        e.currentTarget.setPointerCapture(e.pointerId);
+      } catch (_) {}
+    }
+  };
+
+  const handlePointerMove = (e) => {
+    if (!isDraggingRef.current || isLocked) return;
+    const deltaX = e.clientX - lastPointerXRef.current;
+    lastPointerXRef.current = e.clientX;
+    targetRotationYRef.current += deltaX * 0.0075;
   };
 
   const handlePointerUp = (e) => {
+    if (isDraggingRef.current) {
+      isDraggingRef.current = false;
+      try {
+        e.currentTarget.releasePointerCapture(e.pointerId);
+      } catch (_) {}
+    }
     const dx = Math.abs(e.clientX - pointerDownPos.current.x);
     const dy = Math.abs(e.clientY - pointerDownPos.current.y);
     const dt = Date.now() - pointerDownPos.current.time;
 
-    // Under 6px displacement and under 500ms duration is a click (not a camera orbit drag)
+    // Under 6px displacement and under 500ms duration is a click (not an avatar spin drag)
     if (dx < 6 && dy < 6 && dt < 500) {
       if (focusedItem) {
         onResetFocus && onResetFocus();
@@ -233,9 +274,13 @@ export function Scene({
   return (
     <div
       id="tour-3d-viewport"
-      className="relative w-full h-full select-none overflow-hidden bg-[#f0f5f4]"
+      className={`relative w-full h-full select-none overflow-hidden bg-[#f0f5f4] touch-none ${
+        !isLocked ? "cursor-grab active:cursor-grabbing" : "cursor-default"
+      }`}
       onPointerDown={handlePointerDown}
+      onPointerMove={handlePointerMove}
       onPointerUp={handlePointerUp}
+      onPointerCancel={handlePointerUp}
       onDoubleClick={handleDoubleClick}
     >
       {/* 3D R3F Canvas */}
@@ -255,18 +300,20 @@ export function Scene({
         <directionalLight position={[-10, 14, -10]} intensity={0.35} color="#e2e8f0" />
         <pointLight position={[0, 4, 8]} intensity={0.35} color="#ffffff" distance={20} />
 
-        {/* Camera Rig & Orbit Controls: view lock halts avatar spin and zoom */}
+        {/* Camera Rig: Stays centered with stable view; zoom in/out when unlocked */}
         <CameraRig
           resetTrigger={resetCameraTrigger}
           isLocked={isLocked}
-          turntableAngleRef={turntableAngleRef}
-          onFacingChange={handleFacingChange}
         />
 
         {/* ======================================================== */}
-        {/* 1. ROTATING ANATOMICAL TURNTABLE (Smooth Revolution) */}
+        {/* 1. ROTATING ANATOMICAL TURNTABLE (Avatar & Markers Only) */}
         {/* ======================================================== */}
-        <AvatarTurntable perspective={perspective} turntableAngleRef={turntableAngleRef}>
+        <AvatarTurntable
+          targetRotationYRef={targetRotationYRef}
+          turntableAngleRef={turntableAngleRef}
+          onFacingDetected={handleFacingDetected}
+        >
           {/* Seamless Anatomical Avatar */}
           <Avatar
             profile={profile}
