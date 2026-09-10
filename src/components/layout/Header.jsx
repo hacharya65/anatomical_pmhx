@@ -11,7 +11,8 @@ import {
   X,
   HelpCircle,
   LogOut,
-  Sparkles
+  Sparkles,
+  Award
 } from "lucide-react";
 
 export function Header({
@@ -83,6 +84,23 @@ export function Header({
               <div className="flex items-center gap-1 text-rose-700 font-semibold text-[11px]">
                 <AlertTriangle className="w-3 h-3 shrink-0" />
                 <span>Allergies</span>
+              </div>
+            </>
+          )}
+          {/* Veteran Status: Displays ONLY if individual is a veteran */}
+          {(profile.veteranStatus === "Yes" ||
+            profile.veteranStatus === "yes" ||
+            profile.isVeteran === true ||
+            (typeof profile.veteranStatus === "string" &&
+              profile.veteranStatus.toLowerCase().includes("veteran"))) && (
+            <>
+              <span className="text-slate-300">|</span>
+              <div
+                className="flex items-center gap-1 text-indigo-700 font-bold text-[11px] px-1.5 py-0.5 rounded bg-indigo-50 border border-indigo-200"
+                title="Verified Military Veteran"
+              >
+                <Award className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                <span>Veteran</span>
               </div>
             </>
           )}

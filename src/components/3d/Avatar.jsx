@@ -21,20 +21,20 @@ export function Avatar({
     skinTone = "#f8fafc"
   } = profile;
 
-  // Proportions
+  // Proportions (Narrower hips calibrated relative to shoulder breadth)
   const morph = useMemo(() => {
-    let shoulderW = 0.96;
+    let shoulderW = 1.15;
     let waistW = 0.88;
-    let hipW = 1.12;
+    let hipW = 0.82;
 
     if (sex === "male") {
-      shoulderW = 1.15;
-      waistW = 1.0;
-      hipW = 0.98;
+      shoulderW = 1.25;
+      waistW = 0.96;
+      hipW = 0.78;
     } else if (sex === "neutral") {
-      shoulderW = 1.0;
-      waistW = 0.94;
-      hipW = 1.04;
+      shoulderW = 1.18;
+      waistW = 0.90;
+      hipW = 0.80;
     }
 
     let buildMult = 1.0;
@@ -142,13 +142,13 @@ export function Avatar({
           <cylinderGeometry args={[1.02, 1.18, 1.5, 36]} />
         </mesh>
 
-        {/* Pelvic Bowl & Hips (smooth flare) */}
+        {/* Pelvic Bowl & Hips (Anatomically contoured, narrower than shoulders) */}
         <mesh
           position={[0, 1.35, -0.02]}
-          scale={[1.68 * morph.hipW, 1.2, 1.06 * morph.depth]}
+          scale={[1.32 * morph.hipW, 1.2, 1.02 * morph.depth]}
           material={skinMaterial}
         >
-          <sphereGeometry args={[1.22, 36, 36]} />
+          <sphereGeometry args={[1.2, 36, 36]} />
         </mesh>
       </group>
 
@@ -273,10 +273,10 @@ export function Avatar({
       {/* 5. LOWER EXTREMITIES (Seamless continuous legs, knees, and feet) */}
       {/* ================================================================= */}
       {/* LEFT LEG (Viewer's Right, X > 0) */}
-      <group position={[0.92 * morph.hipW, 0.45, 0]}>
+      <group position={[0.82 * morph.hipW, 0.45, 0]}>
         {/* Thigh (Anatomical taper from trochanter to distal femur) */}
         <mesh position={[0, -1.9, 0]} material={skinMaterial}>
-          <cylinderGeometry args={[0.65 * morph.depth, 0.5 * morph.depth, 3.8, 32]} />
+          <cylinderGeometry args={[0.58 * morph.depth, 0.46 * morph.depth, 3.8, 32]} />
         </mesh>
 
         {/* Knee & Patellar Contour (Smooth anatomical blend, not a ball!) */}
@@ -306,10 +306,10 @@ export function Avatar({
       </group>
 
       {/* RIGHT LEG (Viewer's Left, X < 0) */}
-      <group position={[-0.92 * morph.hipW, 0.45, 0]}>
+      <group position={[-0.82 * morph.hipW, 0.45, 0]}>
         {/* Thigh (Anatomical taper from trochanter to distal femur) */}
         <mesh position={[0, -1.9, 0]} material={skinMaterial}>
-          <cylinderGeometry args={[0.65 * morph.depth, 0.5 * morph.depth, 3.8, 32]} />
+          <cylinderGeometry args={[0.58 * morph.depth, 0.46 * morph.depth, 3.8, 32]} />
         </mesh>
 
         {/* Knee & Patellar Contour (Smooth anatomical blend, not a ball!) */}

@@ -64,15 +64,22 @@ export function ClinicalSummary({ profile = {}, conditions = [], surgeries = [],
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-semibold tracking-wider">Primary Care Provider</span>
-              <span className="text-slate-800 font-medium">{profile.pcp || "Dr. Robert Adams, MD"}</span>
+              <span className="text-slate-800 font-medium">{profile.pcp ? profile.pcp.replace(/\s*\(Internal Medicine\)/gi, "").trim() : "Dr. Robert Adams, MD"}</span>
             </div>
             <div>
-              <span className="text-slate-500 block text-[10px] uppercase font-semibold tracking-wider">Code Status</span>
-              <span className="text-emerald-700 font-bold">Full Code</span>
+              <span className="text-slate-500 block text-[10px] uppercase font-semibold tracking-wider">Code / Veteran Status</span>
+              <div className="flex items-center gap-1.5 mt-0.5">
+                <span className="text-emerald-700 font-bold">Full Code</span>
+                {(profile.veteranStatus === "Yes" || profile.veteranStatus === "yes" || (typeof profile.veteranStatus === "string" && profile.veteranStatus.toLowerCase().includes("veteran"))) && (
+                  <span className="text-[10px] px-1.5 py-0.2 rounded bg-indigo-50 text-indigo-700 font-bold border border-indigo-200">
+                    🎖️ Veteran
+                  </span>
+                )}
+              </div>
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-semibold tracking-wider">Emergency Contact</span>
-              <span className="text-slate-800 font-medium">{profile.emergencyContact || "David Vance (Spouse) • (555) 019-2834"}</span>
+              <span className="text-slate-800 font-medium">{profile.emergencyContact || "Eli Vance (Spouse) • (555) 234-9812"}</span>
             </div>
           </div>
 

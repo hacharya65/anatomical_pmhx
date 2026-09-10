@@ -34,27 +34,71 @@ export function DemographicModal({
   // Active section currently in edit mode: null | "demographics" | "careTeam" | "pharmacy" | "allergyModal"
   const [editingSection, setEditingSection] = useState(null);
 
+  // Helper: parse structured emergency contact
+  const parseEmergencyContact = () => {
+    const raw = profile.emergencyContact || "Eli Vance (Spouse) • (555) 234-9812";
+    if (profile.emergencyContactName && profile.emergencyContactPhone) {
+      return {
+        name: profile.emergencyContactName,
+        relation: profile.emergencyContactRelation || "Spouse",
+        phone: profile.emergencyContactPhone
+      };
+    }
+    const match = raw.match(/^([^(]+?)\s*(?:\(([^)]+)\))?\s*[-•–]\s*(.+)$/);
+    if (match) {
+      return {
+        name: match[1]?.trim() || "Eli Vance",
+        relation: match[2]?.trim() || "Spouse",
+        phone: match[3]?.trim() || "(555) 234-9812"
+      };
+    }
+    return {
+      name: "Eli Vance",
+      relation: "Spouse",
+      phone: "(555) 234-9812"
+    };
+  };
+
+  // Helper: parse gender / administrative sex
+  const parseGenderState = () => {
+    const current = profile.gender || profile.sex || "Female";
+    if (current.toLowerCase() === "female") return { category: "Female", custom: "" };
+    if (current.toLowerCase() === "male") return { category: "Male", custom: "" };
+    return { category: "Other", custom: current };
+  };
+
+  const initialGender = parseGenderState();
+  const initialEC = parseEmergencyContact();
+  const isInitialVeteran =
+    profile.veteranStatus === "Yes" ||
+    profile.veteranStatus === "yes" ||
+    (typeof profile.veteranStatus === "string" &&
+      profile.veteranStatus.toLowerCase().includes("veteran"));
+
   // Demographics form draft
   const [demoDraft, setDemoDraft] = useState({
     name: profile.name || "Elena Vance",
     dob: profile.dob || "1968-04-12",
     age: profile.age || 58,
-    gender: profile.gender || "Female",
+    genderCategory: initialGender.category,
+    genderCustom: initialGender.custom,
     mrn: profile.mrn || "#PMHX-84920",
     phone: profile.phone || "(555) 839-2041",
     email: profile.email || "elena.vance@healthmail.net",
     address: profile.address || "742 Evergreen Terrace, Boston, MA 02115",
-    veteranStatus: profile.veteranStatus || "US Air Force Veteran (Honorable Discharge, 1988-1994)",
+    veteranStatus: isInitialVeteran ? "Yes" : "No",
     preferredLanguage: profile.preferredLanguage || "English",
     bloodType: profile.bloodType || "O Positive"
   });
 
   // Care Team form draft
   const [careDraft, setCareDraft] = useState({
-    pcp: profile.pcp || "Dr. R. Adams, MD (Internal Medicine)",
+    pcp: (profile.pcp || "Dr. Robert Adams, MD").replace(/\s*\(Internal Medicine\)/gi, "").trim(),
     pcpPhone: profile.pcpPhone || "(555) 726-3000",
-    clinic: profile.clinic || "Mass General Brigham Internal Medicine Associates, Suite 400",
-    emergencyContact: profile.emergencyContact || "Eli Vance (Spouse) - (555) 234-9812"
+    clinic: (profile.clinic || "Mass General Brigham Associates, Suite 400").replace(/\s*Internal Medicine\s*/gi, " "),
+    emergencyContactName: initialEC.name,
+    emergencyContactRelation: initialEC.relation,
+    emergencyContactPhone: initialEC.phone
   });
 
   // Pharmacy form draft
@@ -92,13 +136,49 @@ export function DemographicModal({
 
   const handleSaveDemographics = (e) => {
     e.preventDefault();
-    onSaveProfile({ ...profile, ...demoDraft });
+    const finalGender =
+      demoDraft.genderCategory === "Other"
+        ? demoDraft.genderCustom || "Other"
+        : demoDraft.genderCategory;
+    const finalSex =
+      demoDraft.genderCategory === "Male"
+        ? "male"
+        : demoDraft.genderCategory === "Female"
+        ? "female"
+        : "neutral";
+
+    onSaveProfile({
+      ...profile,
+      name: demoDraft.name,
+      dob: demoDraft.dob,
+      age: demoDraft.age,
+      gender: finalGender,
+      sex: finalSex,
+      genderCustom: demoDraft.genderCustom,
+      mrn: demoDraft.mrn,
+      phone: demoDraft.phone,
+      email: demoDraft.email,
+      address: demoDraft.address,
+      veteranStatus: demoDraft.veteranStatus === "Yes" ? "Yes" : "No",
+      preferredLanguage: demoDraft.preferredLanguage,
+      bloodType: demoDraft.bloodType
+    });
     setEditingSection(null);
   };
 
   const handleSaveCareTeam = (e) => {
     e.preventDefault();
-    onSaveProfile({ ...profile, ...careDraft });
+    const formattedContact = `${careDraft.emergencyContactName || "Eli Vance"} (${careDraft.emergencyContactRelation || "Spouse"}) • ${careDraft.emergencyContactPhone || "(555) 234-9812"}`;
+    onSaveProfile({
+      ...profile,
+      pcp: careDraft.pcp.replace(/\s*\(Internal Medicine\)/gi, "").trim(),
+      pcpPhone: careDraft.pcpPhone,
+      clinic: careDraft.clinic,
+      emergencyContactName: careDraft.emergencyContactName,
+      emergencyContactRelation: careDraft.emergencyContactRelation,
+      emergencyContactPhone: careDraft.emergencyContactPhone,
+      emergencyContact: formattedContact
+    });
     setEditingSection(null);
   };
 
@@ -202,16 +282,23 @@ export function DemographicModal({
                 <button
                   type="button"
                   onClick={() => {
+                    const gState = parseGenderState();
+                    const isVet =
+                      profile.veteranStatus === "Yes" ||
+                      profile.veteranStatus === "yes" ||
+                      (typeof profile.veteranStatus === "string" &&
+                        profile.veteranStatus.toLowerCase().includes("veteran"));
                     setDemoDraft({
                       name: profile.name || "Elena Vance",
                       dob: profile.dob || "1968-04-12",
                       age: profile.age || 58,
-                      gender: profile.gender || "Female",
+                      genderCategory: gState.category,
+                      genderCustom: gState.custom,
                       mrn: profile.mrn || "#PMHX-84920",
                       phone: profile.phone || "(555) 839-2041",
                       email: profile.email || "elena.vance@healthmail.net",
                       address: profile.address || "742 Evergreen Terrace, Boston, MA 02115",
-                      veteranStatus: profile.veteranStatus || "US Air Force Veteran (Honorable Discharge, 1988-1994)",
+                      veteranStatus: isVet ? "Yes" : "No",
                       preferredLanguage: profile.preferredLanguage || "English",
                       bloodType: profile.bloodType || "O Positive"
                     });
@@ -277,17 +364,40 @@ export function DemographicModal({
 
                   <div>
                     <label className="block font-medium mb-1 text-slate-600 dark:text-slate-400">Gender / Administrative Sex</label>
-                    <input
-                      type="text"
-                      value={demoDraft.gender}
-                      onChange={(e) => handleDemoChange("gender", e.target.value)}
+                    <select
+                      value={demoDraft.genderCategory}
+                      onChange={(e) => setDemoDraft({ ...demoDraft, genderCategory: e.target.value })}
                       className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
                         isLight
                           ? "bg-white border-slate-300 text-slate-900 focus:border-teal-600"
                           : "bg-slate-900 border-slate-700 text-slate-100 focus:border-teal-500"
                       }`}
-                    />
+                    >
+                      <option value="Female">Female</option>
+                      <option value="Male">Male</option>
+                      <option value="Other">Other (Specify free-text)</option>
+                    </select>
                   </div>
+
+                  {demoDraft.genderCategory === "Other" && (
+                    <div className="sm:col-span-2 animate-in fade-in">
+                      <label className="block font-medium mb-1 text-slate-600 dark:text-slate-400">
+                        Specify Gender / Identity (Free-Text)
+                      </label>
+                      <input
+                        type="text"
+                        value={demoDraft.genderCustom}
+                        onChange={(e) => setDemoDraft({ ...demoDraft, genderCustom: e.target.value })}
+                        placeholder="e.g. Non-binary, Transgender, Two-spirit, or self-described"
+                        className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
+                          isLight
+                            ? "bg-white border-slate-300 text-slate-900 focus:border-teal-600"
+                            : "bg-slate-900 border-slate-700 text-slate-100 focus:border-teal-500"
+                        }`}
+                        required
+                      />
+                    </div>
+                  )}
 
                   <div>
                     <label className="block font-medium mb-1 text-slate-600 dark:text-slate-400">Primary Phone</label>
@@ -333,17 +443,18 @@ export function DemographicModal({
 
                   <div className="sm:col-span-2">
                     <label className="block font-medium mb-1 text-slate-600 dark:text-slate-400">Veteran Status</label>
-                    <input
-                      type="text"
+                    <select
                       value={demoDraft.veteranStatus}
                       onChange={(e) => handleDemoChange("veteranStatus", e.target.value)}
-                      placeholder="e.g. US Armed Forces Veteran (Branch, Dates, Discharge)"
-                      className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
+                      className={`w-full p-2 rounded-lg border text-xs focus:outline-none font-medium ${
                         isLight
                           ? "bg-white border-slate-300 text-slate-900 focus:border-teal-600"
                           : "bg-slate-900 border-slate-700 text-slate-100 focus:border-teal-500"
                       }`}
-                    />
+                    >
+                      <option value="Yes">Yes (US Armed Forces Veteran)</option>
+                      <option value="No">No (Non-Veteran)</option>
+                    </select>
                   </div>
                 </div>
 
@@ -384,8 +495,18 @@ export function DemographicModal({
                 <div>
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Veteran Status</span>
                   <div className="flex items-center gap-1.5 font-medium mt-0.5">
-                    <Award className="w-3.5 h-3.5 text-amber-600 shrink-0" />
-                    <span>{profile.veteranStatus || "US Air Force Veteran (Honorable)"}</span>
+                    {profile.veteranStatus === "Yes" ||
+                    profile.veteranStatus === "yes" ||
+                    profile.isVeteran === true ||
+                    (typeof profile.veteranStatus === "string" &&
+                      profile.veteranStatus.toLowerCase().includes("veteran")) ? (
+                      <span className="flex items-center gap-1 text-indigo-700 font-bold">
+                        <Award className="w-3.5 h-3.5 text-indigo-600 shrink-0" />
+                        <span>Yes (Veteran)</span>
+                      </span>
+                    ) : (
+                      <span className="text-slate-700 font-medium">No</span>
+                    )}
                   </div>
                 </div>
 
@@ -603,11 +724,14 @@ export function DemographicModal({
                 <button
                   type="button"
                   onClick={() => {
+                    const ec = parseEmergencyContact();
                     setCareDraft({
-                      pcp: profile.pcp || "Dr. R. Adams, MD (Internal Medicine)",
+                      pcp: (profile.pcp || "Dr. Robert Adams, MD").replace(/\s*\(Internal Medicine\)/gi, "").trim(),
                       pcpPhone: profile.pcpPhone || "(555) 726-3000",
-                      clinic: profile.clinic || "Mass General Brigham Internal Medicine Associates, Suite 400",
-                      emergencyContact: profile.emergencyContact || "Eli Vance (Spouse) - (555) 234-9812"
+                      clinic: (profile.clinic || "Mass General Brigham Associates, Suite 400").replace(/\s*Internal Medicine\s*/gi, " "),
+                      emergencyContactName: profile.emergencyContactName || ec.name,
+                      emergencyContactRelation: profile.emergencyContactRelation || ec.relation,
+                      emergencyContactPhone: profile.emergencyContactPhone || ec.phone
                     });
                     setEditingSection("careTeam");
                   }}
@@ -632,8 +756,9 @@ export function DemographicModal({
                       type="text"
                       value={careDraft.pcp}
                       onChange={(e) => setCareDraft({ ...careDraft, pcp: e.target.value })}
+                      placeholder="e.g. Dr. Robert Adams, MD"
                       className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
-                        isLight ? "bg-white border-slate-300 text-slate-900" : "bg-slate-900 border-slate-700 text-slate-100"
+                        isLight ? "bg-white border-slate-300 text-slate-900 focus:border-teal-600" : "bg-slate-900 border-slate-700 text-slate-100"
                       }`}
                       required
                     />
@@ -645,8 +770,9 @@ export function DemographicModal({
                       type="text"
                       value={careDraft.clinic}
                       onChange={(e) => setCareDraft({ ...careDraft, clinic: e.target.value })}
+                      placeholder="e.g. Mass General Brigham Associates, Suite 400"
                       className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
-                        isLight ? "bg-white border-slate-300 text-slate-900" : "bg-slate-900 border-slate-700 text-slate-100"
+                        isLight ? "bg-white border-slate-300 text-slate-900 focus:border-teal-600" : "bg-slate-900 border-slate-700 text-slate-100"
                       }`}
                     />
                   </div>
@@ -657,24 +783,69 @@ export function DemographicModal({
                       type="tel"
                       value={careDraft.pcpPhone}
                       onChange={(e) => setCareDraft({ ...careDraft, pcpPhone: e.target.value })}
+                      placeholder="(555) 726-3000"
                       className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
-                        isLight ? "bg-white border-slate-300 text-slate-900" : "bg-slate-900 border-slate-700 text-slate-100"
+                        isLight ? "bg-white border-slate-300 text-slate-900 focus:border-teal-600" : "bg-slate-900 border-slate-700 text-slate-100"
                       }`}
                     />
                   </div>
 
-                  <div>
-                    <label className="block font-medium mb-1 text-slate-600 dark:text-slate-400">Emergency Contact</label>
-                    <input
-                      type="text"
-                      value={careDraft.emergencyContact}
-                      onChange={(e) => setCareDraft({ ...careDraft, emergencyContact: e.target.value })}
-                      placeholder="Name (Relation) - Phone Number"
-                      className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
-                        isLight ? "bg-white border-slate-300 text-slate-900" : "bg-slate-900 border-slate-700 text-slate-100"
-                      }`}
-                      required
-                    />
+                  {/* Structured Emergency Contact Inputs */}
+                  <div className="sm:col-span-2 pt-2 border-t border-slate-200 dark:border-slate-800">
+                    <label className="block font-bold text-slate-800 dark:text-slate-200 mb-2">
+                      Emergency Contact Person & Relation
+                    </label>
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                      <div>
+                        <label className="block font-medium mb-1 text-slate-600 dark:text-slate-400">Contact Full Name</label>
+                        <input
+                          type="text"
+                          value={careDraft.emergencyContactName}
+                          onChange={(e) => setCareDraft({ ...careDraft, emergencyContactName: e.target.value })}
+                          placeholder="e.g. Eli Vance"
+                          className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
+                            isLight ? "bg-white border-slate-300 text-slate-900 focus:border-teal-600" : "bg-slate-900 border-slate-700 text-slate-100"
+                          }`}
+                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-medium mb-1 text-slate-600 dark:text-slate-400">Relationship</label>
+                        <select
+                          value={careDraft.emergencyContactRelation}
+                          onChange={(e) => setCareDraft({ ...careDraft, emergencyContactRelation: e.target.value })}
+                          className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
+                            isLight ? "bg-white border-slate-300 text-slate-900 focus:border-teal-600" : "bg-slate-900 border-slate-700 text-slate-100"
+                          }`}
+                        >
+                          <option value="Spouse">Spouse</option>
+                          <option value="Partner">Partner</option>
+                          <option value="Parent">Parent</option>
+                          <option value="Child">Child (Adult)</option>
+                          <option value="Sibling">Sibling</option>
+                          <option value="Friend">Friend</option>
+                          <option value="Guardian">Guardian</option>
+                          <option value="Power of Attorney">Health Care Proxy / POA</option>
+                          <option value="Caregiver">Caregiver</option>
+                          <option value="Other">Other</option>
+                        </select>
+                      </div>
+
+                      <div>
+                        <label className="block font-medium mb-1 text-slate-600 dark:text-slate-400">Emergency Phone</label>
+                        <input
+                          type="tel"
+                          value={careDraft.emergencyContactPhone}
+                          onChange={(e) => setCareDraft({ ...careDraft, emergencyContactPhone: e.target.value })}
+                          placeholder="(555) 234-9812"
+                          className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
+                            isLight ? "bg-white border-slate-300 text-slate-900 focus:border-teal-600" : "bg-slate-900 border-slate-700 text-slate-100"
+                          }`}
+                          required
+                        />
+                      </div>
+                    </div>
                   </div>
                 </div>
 
@@ -699,7 +870,7 @@ export function DemographicModal({
                 <div>
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Primary Care Physician</span>
                   <div className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
-                    {profile.pcp || "Dr. R. Adams, MD"}
+                    {profile.pcp ? profile.pcp.replace(/\s*\(Internal Medicine\)/gi, "").trim() : "Dr. Robert Adams, MD"}
                   </div>
                   <div className="text-slate-500 text-[11px] mt-0.5">
                     Phone: {profile.pcpPhone || "(555) 726-3000"}
@@ -710,15 +881,21 @@ export function DemographicModal({
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Clinical Facility</span>
                   <div className="flex items-center gap-1.5 font-medium mt-0.5">
                     <Building className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                    <span>{profile.clinic || "Mass General Brigham Internal Medicine Associates"}</span>
+                    <span>{profile.clinic || "Mass General Brigham Associates, Suite 400"}</span>
                   </div>
                 </div>
 
                 <div className="sm:col-span-2">
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Emergency Contact</span>
-                  <div className="flex items-center gap-1.5 font-medium mt-0.5">
+                  <div className="flex items-center gap-2 font-medium mt-0.5 text-slate-800 dark:text-slate-200">
                     <HeartHandshake className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                    <span>{profile.emergencyContact || "Eli Vance (Spouse) - (555) 234-9812"}</span>
+                    <span className="font-bold">{profile.emergencyContactName || "Eli Vance"}</span>
+                    <span className="text-[11px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 font-semibold">
+                      {profile.emergencyContactRelation || "Spouse"}
+                    </span>
+                    <span className="text-slate-600 dark:text-slate-400 font-mono">
+                      {profile.emergencyContactPhone || "(555) 234-9812"}
+                    </span>
                   </div>
                 </div>
               </div>

@@ -14,6 +14,12 @@ export function usePatientData() {
         if (!parsed.lines) parsed.lines = DEFAULT_PATIENT_RECORD.lines || [];
         if (!parsed.allergiesList) parsed.allergiesList = DEFAULT_PATIENT_RECORD.allergiesList || [];
         parsed.profile = { ...DEFAULT_PATIENT_RECORD.profile, ...(parsed.profile || {}) };
+        if (parsed.profile.veteranStatus && parsed.profile.veteranStatus.length > 3) {
+          parsed.profile.veteranStatus = parsed.profile.veteranStatus.toLowerCase().includes("veteran") ? "Yes" : "No";
+        }
+        if (parsed.profile.pcp) {
+          parsed.profile.pcp = parsed.profile.pcp.replace(/\s*\(Internal Medicine\)/gi, "").trim();
+        }
         if (!parsed.profile.pharmacy) {
           parsed.profile.pharmacy = DEFAULT_PATIENT_RECORD.profile.pharmacy;
         }
