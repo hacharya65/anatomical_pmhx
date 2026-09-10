@@ -34,18 +34,29 @@ export function UnifiedSidebar({
 
   // Reorganized navigation tabs:
   // 1. Summary (opens first!)
-  // 2. Medical Conditions (reworded from Conditions)
-  // 3. Surgical History (reworded from Surgeries)
-  // 4. Medications (reworded from Meds)
+  // 2. Medical History (reworded from Medical Conditions)
+  // 3. Surgical History
+  // 4. Medications
   // 5. Lines / Drains (grouped under 1 tab with distinct icons and colors)
   const tabs = [
-    { key: "summary", label: "Summary" },
-    { key: "conditions", label: "Medical Conditions", count: filteredConditions.length },
-    { key: "surgeries", label: "Surgical History", count: filteredSurgeries.length },
-    { key: "medications", label: "Medications", count: filteredMedications.length },
+    { key: "summary", label: "Summary", lines: ["Summary"] },
+    {
+      key: "conditions",
+      label: "Medical History",
+      lines: ["Medical", "History"],
+      count: filteredConditions.length
+    },
+    {
+      key: "surgeries",
+      label: "Surgical History",
+      lines: ["Surgical", "History"],
+      count: filteredSurgeries.length
+    },
+    { key: "medications", label: "Medications", lines: ["Medications"], count: filteredMedications.length },
     {
       key: "lines_drains",
       label: "Lines / Drains",
+      lines: ["Lines /", "Drains"],
       count: filteredLines.length + filteredDrains.length,
       linesCount: filteredLines.length,
       drainsCount: filteredDrains.length
@@ -55,11 +66,11 @@ export function UnifiedSidebar({
   return (
     <aside
       id="tour-unified-sidebar"
-      className="w-full lg:w-[580px] xl:w-[620px] h-full flex flex-col border-l shadow-xl z-20 select-none bg-white border-slate-200 text-slate-800 transition-all"
+      className="w-full lg:w-[600px] xl:w-[640px] h-full flex flex-col border-l shadow-xl z-20 select-none bg-white border-slate-200 text-slate-800 transition-all"
     >
-      {/* 1. Unified Navigation Tabs across top of sidebar (Expanded to eliminate sideways scrolling) */}
-      <div id="tour-sidebar-tabs" className="border-b px-2 pt-2 flex items-center justify-between gap-1 bg-slate-50 border-slate-200">
-        <div className="flex items-center gap-1 flex-1 min-w-0">
+      {/* 1. Unified Navigation Tabs across top of sidebar (Stacked titles to ensure 100% full visibility with zero cutoff) */}
+      <div id="tour-sidebar-tabs" className="border-b px-2 pt-1.5 min-h-[54px] flex items-stretch justify-between gap-1 bg-slate-50 border-slate-200">
+        <div className="flex items-stretch gap-1 flex-1 min-w-0">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.key;
             const hasMatches = isSearching && tab.count > 0;
@@ -70,7 +81,7 @@ export function UnifiedSidebar({
                 key={tab.key}
                 type="button"
                 onClick={() => onTabChange(tab.key)}
-                className={`flex-1 min-w-0 py-2 px-1 text-[11px] xl:text-xs font-semibold rounded-t-lg transition-all flex items-center justify-center gap-1 border-b-2 ${
+                className={`flex-1 min-w-0 py-1.5 px-1.5 text-[11px] xl:text-xs font-semibold rounded-t-lg transition-all flex items-center justify-center gap-1.5 border-b-2 ${
                   isActive
                     ? "text-teal-800 border-teal-700 bg-white shadow-xs font-bold"
                     : isZeroMatches
@@ -80,69 +91,75 @@ export function UnifiedSidebar({
                     : "text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-100/60"
                 }`}
               >
-                <span className="truncate">{tab.label}</span>
-
-              {/* Special grouped badge for Lines / Drains keeping individual colors and icons */}
-              {tab.key === "lines_drains" ? (
-                <div className="flex items-center gap-1 shrink-0 ml-0.5">
-                  {/* Line indicator: Green IV icon + count */}
-                  <span
-                    title={`${tab.linesCount} Active Vascular Lines`}
-                    className={`flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold border transition-colors ${
-                      isActive
-                        ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                        : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                    }`}
-                  >
-                    <svg className="w-2.5 h-2.5 text-emerald-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M7 4h10v14a4 4 0 0 1-4 4h-2a4 4 0 0 1-4-4V4Z" />
-                      <path d="M10 2h4" />
-                      <path d="M12 11v6" />
-                      <path d="M9 14h6" />
-                    </svg>
-                    <span>{tab.linesCount}</span>
-                  </span>
-
-                  {/* Drain indicator: Pink drainage bulb icon + count */}
-                  <span
-                    title={`${tab.drainsCount} Active Surgical Drains`}
-                    className={`flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold border transition-colors ${
-                      isActive
-                        ? "bg-pink-100 text-pink-800 border-pink-300"
-                        : "bg-pink-50 text-pink-700 border-pink-200"
-                    }`}
-                  >
-                    <svg className="w-2.5 h-2.5 text-pink-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                      <path d="M12 2v6" />
-                      <circle cx="12" cy="14" r="6" />
-                      <path d="M12 11v4" />
-                      <path d="M10 13h4" />
-                    </svg>
-                    <span>{tab.drainsCount}</span>
-                  </span>
+                <div className="flex flex-col items-center justify-center leading-[1.15] text-center shrink-0">
+                  {tab.lines.map((lineText, idx) => (
+                    <span key={idx} className="whitespace-nowrap tracking-tight">
+                      {lineText}
+                    </span>
+                  ))}
                 </div>
-              ) : (
-                tab.count !== undefined && (
-                  <span
-                    className={`text-[11px] px-1.5 py-0.2 rounded-full font-bold shrink-0 transition-colors ${
-                      isActive
-                        ? hasMatches
-                          ? "bg-teal-700 text-white shadow-xs"
-                          : "bg-teal-100 text-teal-800"
-                        : hasMatches
-                        ? "bg-teal-600 text-white shadow-xs animate-pulse"
-                        : isZeroMatches
-                        ? "bg-slate-200 text-slate-400"
-                        : "bg-slate-200/80 text-slate-600"
-                    }`}
-                  >
-                    {tab.count}
-                  </span>
-                )
-              )}
-            </button>
-          );
-        })}
+
+                {/* Special grouped badge for Lines / Drains keeping individual colors and icons */}
+                {tab.key === "lines_drains" ? (
+                  <div className="flex flex-col xl:flex-row items-center gap-0.5 shrink-0 ml-0.5">
+                    {/* Line indicator: Green IV icon + count */}
+                    <span
+                      title={`${tab.linesCount} Active Vascular Lines`}
+                      className={`flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold border transition-colors ${
+                        isActive
+                          ? "bg-emerald-100 text-emerald-800 border-emerald-300"
+                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
+                      }`}
+                    >
+                      <svg className="w-2.5 h-2.5 text-emerald-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M7 4h10v14a4 4 0 0 1-4 4h-2a4 4 0 0 1-4-4V4Z" />
+                        <path d="M10 2h4" />
+                        <path d="M12 11v6" />
+                        <path d="M9 14h6" />
+                      </svg>
+                      <span>{tab.linesCount}</span>
+                    </span>
+
+                    {/* Drain indicator: Pink drainage bulb icon + count */}
+                    <span
+                      title={`${tab.drainsCount} Active Surgical Drains`}
+                      className={`flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold border transition-colors ${
+                        isActive
+                          ? "bg-pink-100 text-pink-800 border-pink-300"
+                          : "bg-pink-50 text-pink-700 border-pink-200"
+                      }`}
+                    >
+                      <svg className="w-2.5 h-2.5 text-pink-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                        <path d="M12 2v6" />
+                        <circle cx="12" cy="14" r="6" />
+                        <path d="M12 11v4" />
+                        <path d="M10 13h4" />
+                      </svg>
+                      <span>{tab.drainsCount}</span>
+                    </span>
+                  </div>
+                ) : (
+                  tab.count !== undefined && (
+                    <span
+                      className={`text-[10.5px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ml-0.5 transition-colors ${
+                        isActive
+                          ? hasMatches
+                            ? "bg-teal-700 text-white shadow-xs"
+                            : "bg-teal-100 text-teal-800"
+                          : hasMatches
+                          ? "bg-teal-600 text-white shadow-xs animate-pulse"
+                          : isZeroMatches
+                          ? "bg-slate-200 text-slate-400"
+                          : "bg-slate-200/80 text-slate-600"
+                      }`}
+                    >
+                      {tab.count}
+                    </span>
+                  )
+                )}
+              </button>
+            );
+          })}
         </div>
       </div>
 
@@ -158,7 +175,7 @@ export function UnifiedSidebar({
           />
         )}
 
-        {/* Medical Conditions Tab */}
+        {/* Medical History Tab */}
         {activeTab === "conditions" && (
           <ConditionList
             conditions={filteredConditions}

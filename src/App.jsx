@@ -405,8 +405,8 @@ export default function App() {
         <button
           type="button"
           onClick={() => setIsSidebarOpen((prev) => !prev)}
-          className={`absolute top-1/2 -translate-y-1/2 z-30 flex flex-col items-center justify-center w-5 h-24 bg-white border border-r-0 border-slate-300 shadow-md text-slate-500 hover:text-teal-700 hover:bg-teal-50 transition-all rounded-l-md cursor-pointer group select-none ${
-            isSidebarOpen ? "right-[580px] xl:right-[620px]" : "right-0"
+          className={`absolute top-1/2 -translate-y-1/2 z-30 flex flex-col items-center justify-center w-5 h-24 bg-white border border-r-0 border-slate-300 shadow-md text-slate-500 hover:text-teal-700 hover:bg-teal-50 transition-all duration-300 ease-in-out rounded-l-md cursor-pointer group select-none ${
+            isSidebarOpen ? "right-[600px] xl:right-[640px]" : "right-0"
           }`}
           title={isSidebarOpen ? "Collapse navigation panel to expand 3D workspace" : "Expand navigation panel"}
           aria-label={isSidebarOpen ? "Collapse navigation panel" : "Expand navigation panel"}
@@ -420,31 +420,39 @@ export default function App() {
           <div className="w-1 h-3.5 bg-slate-300 group-hover:bg-teal-500 rounded-full mt-1.5 transition-colors" />
         </button>
 
-        {/* Unified Right Sidebar: Conditionally rendered with close function */}
-        {isSidebarOpen && (
-          <UnifiedSidebar
-            activeTab={activeTab}
-            onTabChange={setActiveTab}
-            onToggleSidebar={() => setIsSidebarOpen(false)}
-            searchQuery={searchQuery}
-            patientData={patientData}
-            filteredLines={filteredLines}
-            filteredDrains={filteredDrains}
-            filteredSurgeries={filteredSurgeries}
-            filteredConditions={filteredConditions}
-            filteredMedications={filteredMedications}
-            focusedItem={focusedItem}
-            onFocusItem={handleFocusItem}
-            onFocusOrgan={handleFocusOrgan}
-            onOpenAdd={handleOpenAdd}
-            onOpenEdit={handleOpenEdit}
-            deleteLine={deleteLine}
-            deleteDrain={deleteDrain}
-            deleteSurgery={deleteSurgery}
-            deleteCondition={deleteCondition}
-            deleteMedication={deleteMedication}
-          />
-        )}
+        {/* Unified Right Sidebar: Smooth animated slide and collapse */}
+        <div
+          className={`h-full shrink-0 overflow-hidden transition-all duration-300 ease-in-out ${
+            isSidebarOpen
+              ? "w-full lg:w-[600px] xl:w-[640px] opacity-100"
+              : "w-0 opacity-0 pointer-events-none"
+          }`}
+        >
+          <div className="w-full lg:w-[600px] xl:w-[640px] h-full flex flex-col">
+            <UnifiedSidebar
+              activeTab={activeTab}
+              onTabChange={setActiveTab}
+              onToggleSidebar={() => setIsSidebarOpen(false)}
+              searchQuery={searchQuery}
+              patientData={patientData}
+              filteredLines={filteredLines}
+              filteredDrains={filteredDrains}
+              filteredSurgeries={filteredSurgeries}
+              filteredConditions={filteredConditions}
+              filteredMedications={filteredMedications}
+              focusedItem={focusedItem}
+              onFocusItem={handleFocusItem}
+              onFocusOrgan={handleFocusOrgan}
+              onOpenAdd={handleOpenAdd}
+              onOpenEdit={handleOpenEdit}
+              deleteLine={deleteLine}
+              deleteDrain={deleteDrain}
+              deleteSurgery={deleteSurgery}
+              deleteCondition={deleteCondition}
+              deleteMedication={deleteMedication}
+            />
+          </div>
+        </div>
       </div>
 
       {/* Modals */}
