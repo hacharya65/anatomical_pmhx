@@ -128,7 +128,7 @@ export function LoginView({ onDemoAccess, onLoginSuccess }) {
               </span>
             </h1>
             <p className="text-[10px] sm:text-xs font-semibold text-slate-700">
-              Department of Internal Medicine • Spatial Clinical EMR
+              Spatial Clinical EMR
             </p>
           </div>
         </div>
