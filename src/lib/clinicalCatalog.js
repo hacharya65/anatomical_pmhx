@@ -73,6 +73,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-htn",
       name: "Hypertension (Essential)",
+      plainName: "High Blood Pressure",
       region: "Heart / Thoracic Vasculature",
       icd10: "I10",
       coords: { x: 0.35, y: 4.25, z: 1.1 },
@@ -82,6 +83,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-t2d",
       name: "Type 2 Diabetes Mellitus",
+      plainName: "Type 2 Diabetes (High Blood Sugar)",
       region: "Pancreas / Epigastric Abdomen",
       icd10: "E11.9",
       coords: { x: 0.1, y: 2.7, z: 1.0 },
@@ -91,6 +93,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-asthma",
       name: "Bronchial Asthma",
+      plainName: "Asthma (Breathing Difficulty)",
       region: "Bilateral Pulmonary Bronchial Tree",
       icd10: "J45.909",
       coords: { x: -0.5, y: 4.5, z: 1.0 },
@@ -100,6 +103,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-gerd",
       name: "Gastroesophageal Reflux Disease (GERD)",
+      plainName: "Acid Reflux / Heartburn",
       region: "Lower Esophagus / Epigastrium",
       icd10: "K21.9",
       coords: { x: 0.15, y: 3.4, z: 1.0 },
@@ -109,6 +113,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-afib",
       name: "Atrial Fibrillation (Paroxysmal)",
+      plainName: "Irregular Heartbeat (AFib)",
       region: "Left Atrium / Conduction System",
       icd10: "I48.0",
       coords: { x: 0.45, y: 4.6, z: 0.9 },
@@ -118,6 +123,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-hypothyroid",
       name: "Primary Hypothyroidism",
+      plainName: "Underactive Thyroid Gland",
       region: "Anterior Cervical Neck / Thyroid",
       icd10: "E03.9",
       coords: { x: 0.0, y: 5.7, z: 0.65 },
@@ -127,6 +133,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-oa-knee",
       name: "Osteoarthritis (Right Knee)",
+      plainName: "Right Knee Joint Wear & Tear",
       region: "Right Knee Joint (Medial Compartment)",
       icd10: "M17.11",
       coords: { x: -1.18, y: -4.25, z: 0.8 },
@@ -136,6 +143,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-cad",
       name: "Coronary Artery Disease (CAD)",
+      plainName: "Heart Artery Disease (Blocked Arteries)",
       region: "Coronary Arteries (LAD & RCA)",
       icd10: "I25.10",
       coords: { x: 0.3, y: 3.9, z: 1.15 },
@@ -145,6 +153,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-ckd",
       name: "Chronic Kidney Disease (Stage 3a)",
+      plainName: "Reduced Kidney Function",
       region: "Left Posterior Flank / Renal Cortex",
       icd10: "N18.31",
       coords: { x: 0.8, y: 2.6, z: -0.9 },
@@ -155,6 +164,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-migraine",
       name: "Chronic Migraine with Aura",
+      plainName: "Severe Migraine Headaches",
       region: "Right Frontotemporal Cranium",
       icd10: "G43.909",
       coords: { x: -0.7, y: 7.8, z: 0.8 },
@@ -164,6 +174,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-mdd",
       name: "Major Depressive Disorder",
+      plainName: "Clinical Depression",
       region: "Prefrontal Cortex / Neuroaxis",
       icd10: "F33.0",
       coords: { x: 0.0, y: 8.2, z: 0.7 },
@@ -173,6 +184,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-hyperlipid",
       name: "Hyperlipidemia (Mixed)",
+      plainName: "High Cholesterol & Blood Fats",
       region: "Aortic Arch & Vasculature",
       icd10: "E78.2",
       coords: { x: -0.1, y: 4.8, z: 1.0 },
@@ -182,6 +194,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-crohn",
       name: "Crohn's Disease",
+      plainName: "Crohn's Inflammatory Bowel Disease",
       region: "Terminal Ileum / RLQ",
       icd10: "K50.00",
       coords: { x: -0.6, y: 1.5, z: 0.9 },
@@ -191,6 +204,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-osteopor",
       name: "Osteoporosis",
+      plainName: "Thin or Fragile Bones",
       region: "Lumbar Vertebrae / Spine",
       icd10: "M81.0",
       coords: { x: 0.0, y: 2.1, z: -0.85 },
@@ -201,6 +215,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-glaucoma",
       name: "Primary Open-Angle Glaucoma",
+      plainName: "High Eye Pressure (Glaucoma)",
       region: "Left Orbit / Optic Nerve",
       icd10: "H40.11",
       coords: { x: 0.38, y: 7.7, z: 0.95 },
@@ -210,6 +225,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-ra",
       name: "Rheumatoid Arthritis",
+      plainName: "Autoimmune Joint Inflammation",
       region: "Right Hand / MCP & PIP Joints",
       icd10: "M06.9",
       coords: { x: -3.1, y: -1.7, z: 0.3 },
@@ -219,6 +235,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-osa",
       name: "Obstructive Sleep Apnea (OSA)",
+      plainName: "Sleep Breathing Pauses (Sleep Apnea)",
       region: "Oropharynx / Upper Airway",
       icd10: "G47.33",
       coords: { x: 0.0, y: 6.4, z: 0.7 },
@@ -228,6 +245,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-copd",
       name: "COPD / Chronic Bronchitis",
+      plainName: "Chronic Obstructive Lung Disease",
       region: "Right Pulmonary Parenchyma",
       icd10: "J44.9",
       coords: { x: -0.8, y: 3.8, z: 0.95 },
@@ -237,6 +255,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-cholelith",
       name: "Cholelithiasis (History)",
+      plainName: "Gallstones History",
       region: "Right Upper Quadrant (Gallbladder)",
       icd10: "K80.20",
       coords: { x: -0.75, y: 2.85, z: 0.95 },
@@ -246,6 +265,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "cond-epilepsy",
       name: "Generalized Epilepsy",
+      plainName: "Seizure Disorder (Epilepsy)",
       region: "Temporal Lobe / Cerebral Cortex",
       icd10: "G40.909",
       coords: { x: 0.8, y: 7.7, z: 0.4 },
@@ -259,6 +279,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-lap-chole",
       name: "Laparoscopic Cholecystectomy",
+      plainName: "Gallbladder Removal Surgery",
       site: "Right Upper Quadrant (RUQ)",
       incision: "4-trocar laparoscopic punctures (umbilical, epigastric, 2 subcostal in RUQ)",
       coords: { x: -0.92, y: 3.25, z: 1.05 },
@@ -270,6 +291,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-appendectomy",
       name: "Appendectomy (Laparoscopic)",
+      plainName: "Appendix Removal Surgery",
       site: "Right Lower Quadrant / McBurney's Point",
       incision: "Tri-port laparoscopic puncture scars in RLQ",
       coords: { x: -0.8, y: 1.2, z: 0.95 },
@@ -281,6 +303,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-c-section",
       name: "Cesarean Section (Low Transverse)",
+      plainName: "C-Section Delivery",
       site: "Suprapubic Pelvis",
       incision: "Pfannenstiel horizontal low transverse incision (12 cm)",
       coords: { x: 0.0, y: 0.4, z: 1.15 },
@@ -292,6 +315,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-tka-right",
       name: "Total Knee Arthroplasty (Right)",
+      plainName: "Right Knee Joint Replacement",
       site: "Right Anterior Knee Joint",
       incision: "Midline anterior longitudinal right knee incision (15 cm)",
       coords: { x: -0.82, y: -4.55, z: 0.82 },
@@ -303,6 +327,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-cabg",
       name: "Coronary Artery Bypass Graft (CABG x3)",
+      plainName: "Heart Bypass Surgery (Triple Bypass)",
       site: "Anterior Midline Thorax",
       incision: "Median sternotomy scar & right saphenous vein harvest sites",
       coords: { x: 0.0, y: 4.1, z: 1.25 },
@@ -314,6 +339,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-cataract",
       name: "Cataract Extraction with IOL (Right Eye)",
+      plainName: "Right Eye Cataract Lens Replacement",
       site: "Right Eye / Corneal Limbus",
       incision: "Clear corneal micro-incision in right eye (2.4 mm)",
       coords: { x: -0.38, y: 7.7, z: 0.98 },
@@ -325,6 +351,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-hernia",
       name: "Inguinal Hernia Repair (Right)",
+      plainName: "Groin Hernia Repair with Mesh",
       site: "Right Inguinal Canal / Groin",
       incision: "Right oblique groin incision with polypropylene mesh",
       coords: { x: -0.6, y: 0.6, z: 1.1 },
@@ -336,6 +363,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-carpal-tunnel",
       name: "Carpal Tunnel Release (Right)",
+      plainName: "Right Wrist Carpal Tunnel Release",
       site: "Right Volar Wrist",
       incision: "Right palmar incision along thenar crease (2.5 cm)",
       coords: { x: -3.05, y: -1.1, z: 0.35 },
@@ -347,6 +375,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-discectomy",
       name: "Lumbar Microdiscectomy (L4-L5)",
+      plainName: "Lower Back Disc Repair / Removal",
       site: "Posterior Midline Lumbar Spine",
       incision: "Posterior midline vertical lumbar incision (3 cm)",
       coords: { x: 0.0, y: 1.8, z: -1.05 },
@@ -359,6 +388,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-tha-left",
       name: "Total Hip Arthroplasty (Left)",
+      plainName: "Left Hip Joint Replacement",
       site: "Left Posterolateral Hip",
       incision: "Posterolateral curved incision over left greater trochanter",
       coords: { x: 1.35, y: 0.5, z: 0.4 },
@@ -370,6 +400,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-rotator-cuff",
       name: "Rotator Cuff Repair (Right Shoulder)",
+      plainName: "Right Shoulder Tendon Repair",
       site: "Right Anterior-Lateral Shoulder",
       incision: "3 arthroscopic portal puncture scars on right shoulder",
       coords: { x: -2.45, y: 4.9, z: 0.6 },
@@ -381,6 +412,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-thyroid",
       name: "Total Thyroidectomy",
+      plainName: "Complete Thyroid Gland Removal",
       site: "Anterior Low Cervical Neck",
       incision: "Low transverse collar incision following natural skin crease",
       coords: { x: 0.0, y: 5.6, z: 0.65 },
@@ -392,6 +424,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-tonsils",
       name: "Bilateral Tonsillectomy",
+      plainName: "Tonsils Removal Surgery",
       site: "Oropharynx / Palatine Tonsils",
       incision: "Internal mucosal electrocautery (no external scar)",
       coords: { x: 0.0, y: 6.2, z: 0.6 },
@@ -403,6 +436,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-pacemaker",
       name: "Dual-Chamber Pacemaker Implantation",
+      plainName: "Heart Pacemaker Placement",
       site: "Left Subclavian Prepectoral Region",
       incision: "Horizontal infraclavicular pocket incision on left chest (4 cm)",
       coords: { x: 1.2, y: 4.7, z: 1.05 },
@@ -414,6 +448,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-lumpectomy",
       name: "Partial Mastectomy (Left Lumpectomy)",
+      plainName: "Breast Lump Removal (Lumpectomy)",
       site: "Left Upper Outer Breast Quadrant",
       incision: "Curvilinear incision with sentinel lymph node biopsy scar",
       coords: { x: 1.1, y: 3.9, z: 1.2 },
@@ -591,8 +626,305 @@ export const CLINICAL_CATALOG = {
       prescriber: "Dr. R. Adams, MD",
       instructions: "Take with a meal containing dietary healthy fats for optimal absorption."
     }
+  ],
+
+  // Diagnostic & Screening Procedures Catalog
+  procedures: [
+    {
+      id: "proc-colonoscopy",
+      name: "Screening Colonoscopy",
+      plainName: "Colon Camera Check (Colonoscopy)",
+      procedure_type: "screening",
+      anatomical_marker: "Lower Abdomen / Large Intestine",
+      coords: { x: 0.1, y: 1.8, z: 1.05 },
+      system: "digestive",
+      defaultRecallYears: 5,
+      findingsSummary: "Endoscopic visualization of the entire colon and terminal ileum for polyps or inflammation.",
+      layExplanation: "A doctor uses a tiny camera to look inside your large intestine to check for polyps or health changes."
+    },
+    {
+      id: "proc-egd",
+      name: "Upper Endoscopy (EGD)",
+      plainName: "Upper Stomach Camera Exam (EGD)",
+      procedure_type: "diagnostic",
+      anatomical_marker: "Upper Abdomen / Esophagus & Stomach",
+      coords: { x: 0.15, y: 3.3, z: 1.0 },
+      system: "digestive",
+      defaultRecallYears: 3,
+      findingsSummary: "Esophagogastroduodenoscopy evaluating mucosal lining of esophagus, stomach, and duodenum.",
+      layExplanation: "A thin tube with a camera examines your throat, food pipe, and stomach lining."
+    },
+    {
+      id: "proc-echo",
+      name: "Transthoracic Echocardiogram (Echo)",
+      plainName: "Heart Ultrasound (Echo)",
+      procedure_type: "diagnostic",
+      anatomical_marker: "Thorax / Heart",
+      coords: { x: 0.35, y: 4.35, z: 1.1 },
+      system: "cardiac",
+      defaultRecallYears: 1,
+      findingsSummary: "Ultrasound evaluation of cardiac chambers, ejection fraction, valve dynamics, and wall motion.",
+      layExplanation: "Sound waves create moving pictures of your heart pumping and heart valves."
+    },
+    {
+      id: "proc-mammogram",
+      name: "Screening Mammogram",
+      plainName: "Breast Imaging (Mammogram)",
+      procedure_type: "screening",
+      anatomical_marker: "Bilateral Breasts / Anterior Thorax",
+      coords: { x: 0.65, y: 4.6, z: 1.05 },
+      system: "respiratory",
+      defaultRecallYears: 1,
+      findingsSummary: "Low-dose 3D tomosynthesis mammography evaluating breast tissue parenchyma.",
+      layExplanation: "A low-dose X-ray picture of breast tissue used for early health screenings."
+    },
+    {
+      id: "proc-dexa",
+      name: "Bone Density Scan (DEXA)",
+      plainName: "Bone Strength Scan (DEXA)",
+      procedure_type: "diagnostic",
+      anatomical_marker: "Lumbar Spine & Bilateral Hips",
+      coords: { x: 0.0, y: 2.15, z: -0.95 },
+      system: "spine",
+      isPosterior: true,
+      defaultRecallYears: 2,
+      findingsSummary: "Dual-energy X-ray absorptiometry measuring bone mineral density and fracture risk T-scores.",
+      layExplanation: "A gentle scan that measures how strong and dense your bones are."
+    },
+    {
+      id: "proc-chest-ct",
+      name: "Chest CT / Low-Dose CT",
+      plainName: "Chest CT Scan (Lung Imaging)",
+      procedure_type: "diagnostic",
+      anatomical_marker: "Thorax / Bilateral Lungs",
+      coords: { x: -0.5, y: 4.6, z: 1.0 },
+      system: "respiratory",
+      defaultRecallYears: 1,
+      findingsSummary: "High-resolution computed tomography evaluating pulmonary parenchyma and mediastinum.",
+      layExplanation: "Detailed 3D pictures of your lungs, chest, and airways."
+    },
+    {
+      id: "proc-stress-test",
+      name: "Exercise Cardiac Stress Test",
+      plainName: "Treadmill Heart Stress Test",
+      procedure_type: "diagnostic",
+      anatomical_marker: "Thorax / Coronary Circulation",
+      coords: { x: 0.3, y: 4.0, z: 1.15 },
+      system: "cardiac",
+      defaultRecallYears: 2,
+      findingsSummary: "Electrocardiographic and blood pressure response to Bruce protocol treadmill exercise.",
+      layExplanation: "Monitors your heart rate and rhythm while walking on a treadmill to check blood flow."
+    },
+    {
+      id: "proc-brain-mri",
+      name: "Brain MRI (Without Contrast)",
+      plainName: "Brain MRI Scan",
+      procedure_type: "diagnostic",
+      anatomical_marker: "Head / Cranium & Brain",
+      coords: { x: 0.0, y: 8.0, z: 0.7 },
+      system: "neurologic",
+      defaultRecallYears: 3,
+      findingsSummary: "Multi-planar magnetic resonance imaging evaluating cerebral hemispheres and ventricles.",
+      layExplanation: "Detailed magnetic imaging that takes pictures of the brain and head without radiation."
+    }
+  ],
+
+  // CDC Adult Recommended Vaccines Catalog
+  vaccines: [
+    {
+      id: "vax-flu",
+      name: "Influenza (Flu Quadrivalent)",
+      plainName: "Annual Flu Shot",
+      category: "Annual Routine",
+      scheduleRule: "annual",
+      recommendedSeason: "Autumn (September - November)",
+      doseDescription: "1 dose every year before flu season",
+      targetGroup: "All adults 18+",
+      protectionSummary: "Protects against 4 strains of the seasonal influenza respiratory virus."
+    },
+    {
+      id: "vax-covid",
+      name: "COVID-19 Updated Booster (mRNA)",
+      plainName: "Updated COVID-19 Booster",
+      category: "Annual / Seasonal",
+      scheduleRule: "annual",
+      recommendedSeason: "Autumn (September - November)",
+      doseDescription: "1 updated dose annually or 2-3 months after prior infection",
+      targetGroup: "All adults 18+",
+      protectionSummary: "Updated immune protection against current circulating variants of SARS-CoV-2."
+    },
+    {
+      id: "vax-tdap",
+      name: "Tdap (Tetanus, Diphtheria, Pertussis)",
+      plainName: "Tetanus & Whooping Cough Booster",
+      category: "Every 10 Years",
+      scheduleRule: "10_years",
+      doseDescription: "1 dose every 10 years (or during each pregnancy)",
+      targetGroup: "All adults every 10 years",
+      protectionSummary: "Protects against painful muscle lockjaw (tetanus), diphtheria, and whooping cough."
+    },
+    {
+      id: "vax-shingrix",
+      name: "Shingrix (Recombinant Zoster)",
+      plainName: "Shingles Vaccine (2 Doses)",
+      category: "Adults 50+",
+      scheduleRule: "series_completed",
+      totalDoses: 2,
+      doseDescription: "2 doses spaced 2 to 6 months apart (lifetime protection)",
+      targetGroup: "Adults age 50 and older, or immunocompromised age 19+",
+      protectionSummary: "Over 90% protection against painful shingles rash and long-term nerve pain."
+    },
+    {
+      id: "vax-pneumococcal",
+      name: "Pneumococcal Conjugate (PCV20 / PPSV23)",
+      plainName: "Pneumonia Vaccine",
+      category: "Adults 65+ or High Risk",
+      scheduleRule: "once_or_series",
+      doseDescription: "1 dose of PCV20 (or PCV15 followed by PPSV23)",
+      targetGroup: "Adults age 65+, or adults 19-64 with asthma, diabetes, or heart conditions",
+      protectionSummary: "Defends against severe bacterial pneumonia, bloodstream infections, and meningitis."
+    },
+    {
+      id: "vax-rsv",
+      name: "RSV Vaccine (Arexvy / Abrysvo)",
+      plainName: "RSV Respiratory Vaccine",
+      category: "Adults 60-75+ Clinical Decision",
+      scheduleRule: "once",
+      doseDescription: "1 dose for adults age 75+, or age 60-74 with chronic lung or heart disease",
+      targetGroup: "Adults 75+ or adults 60-74 with risk factors",
+      protectionSummary: "Protects vulnerable lungs against severe respiratory syncytial virus."
+    },
+    {
+      id: "vax-hepb",
+      name: "Hepatitis B Recombinant",
+      plainName: "Hepatitis B Liver Protection",
+      category: "Routine 2-3 Doses",
+      scheduleRule: "series_completed",
+      totalDoses: 3,
+      doseDescription: "2 or 3 dose series for adults age 19-59",
+      targetGroup: "Adults age 19-59 or high risk",
+      protectionSummary: "Long-term protection against hepatitis B viral infection and liver damage."
+    }
   ]
 };
+
+/**
+ * Calculates procedure recall schedule and status
+ */
+export function calculateProcedureRecall(procedure) {
+  if (!procedure) return { status: "unknown", text: "No schedule date", isDue: false, badgeColor: "bg-slate-500/15 text-slate-400 border-slate-500/30" };
+  const performed = procedure.date_performed || procedure.datePerformed;
+  const interval = Number(procedure.recall_interval_years || procedure.recallIntervalYears);
+
+  if (!performed) {
+    return { status: "unknown", text: "Date unrecorded", isDue: false, badgeColor: "bg-slate-500/15 text-slate-400 border-slate-500/30" };
+  }
+
+  const perfDate = new Date(performed);
+  if (isNaN(perfDate.getTime())) {
+    return { status: "unknown", text: "Invalid date", isDue: false, badgeColor: "bg-slate-500/15 text-slate-400 border-slate-500/30" };
+  }
+
+  if (!interval || interval <= 0) {
+    return { status: "completed", text: "Completed (No repeat scheduled)", isDue: false, badgeColor: "bg-slate-500/15 text-slate-300 border-slate-500/30" };
+  }
+
+  const nextDueDate = new Date(perfDate);
+  nextDueDate.setFullYear(nextDueDate.getFullYear() + interval);
+  const nextDueDateStr = nextDueDate.toISOString().split("T")[0];
+
+  const now = new Date();
+  const diffDays = Math.round((nextDueDate - now) / (1000 * 60 * 60 * 24));
+
+  if (diffDays < 0) {
+    return {
+      status: "overdue",
+      nextDueDate: nextDueDateStr,
+      text: `Past due (Was due in ${nextDueDate.getFullYear()})`,
+      isDue: true,
+      badgeColor: "bg-red-500/15 text-red-400 border-red-500/30"
+    };
+  } else if (diffDays <= 180) {
+    return {
+      status: "due_soon",
+      nextDueDate: nextDueDateStr,
+      text: `Due soon (${nextDueDateStr})`,
+      isDue: true,
+      badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30"
+    };
+  } else {
+    return {
+      status: "scheduled",
+      nextDueDate: nextDueDateStr,
+      text: `Due again in ${nextDueDate.getFullYear()}`,
+      isDue: false,
+      badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30"
+    };
+  }
+}
+
+/**
+ * Evaluates CDC immunization status for an adult vaccine record
+ */
+export function calculateVaccineStatus(vaccine) {
+  if (!vaccine) return { status: "recommended", label: "Recommended / Due", isUpToDate: false, badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30" };
+  const administered = vaccine.date_administered || vaccine.dateAdministered;
+  const name = (vaccine.vaccine_name || vaccine.name || "").toLowerCase();
+  const dose = Number(vaccine.dose_number || vaccine.doseNumber || 1);
+
+  if (!administered) {
+    return { status: "due", label: "Recommended", isUpToDate: false, badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30" };
+  }
+
+  const adminDate = new Date(administered);
+  if (isNaN(adminDate.getTime())) {
+    return { status: "unknown", label: "Unverified", isUpToDate: false, badgeColor: "bg-slate-500/15 text-slate-400 border-slate-500/30" };
+  }
+
+  const now = new Date();
+  const diffMonths = (now.getFullYear() - adminDate.getFullYear()) * 12 + (now.getMonth() - adminDate.getMonth());
+  const diffYears = diffMonths / 12;
+
+  // Flu: Annual (within last 12 months)
+  if (name.includes("flu") || name.includes("influenza")) {
+    if (diffMonths <= 12) {
+      return { status: "current", label: "Up to Date (This Season)", isUpToDate: true, badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" };
+    }
+    return { status: "due", label: "Due for Autumn Flu Shot", isUpToDate: false, badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30" };
+  }
+
+  // COVID-19: Updated booster within last 12 months
+  if (name.includes("covid") || name.includes("sars")) {
+    if (diffMonths <= 12) {
+      return { status: "current", label: "Up to Date (Updated Booster)", isUpToDate: true, badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" };
+    }
+    return { status: "due", label: "Recommended Updated Booster", isUpToDate: false, badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30" };
+  }
+
+  // Tdap / Tetanus: 10 years
+  if (name.includes("tdap") || name.includes("tetanus")) {
+    if (diffYears < 10) {
+      const remainingYears = Math.max(1, Math.round(10 - diffYears));
+      return { status: "current", label: `Up to Date (${remainingYears} yrs left)`, isUpToDate: true, badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" };
+    }
+    return { status: "due", label: "Booster Due (10-Year Interval)", isUpToDate: false, badgeColor: "bg-red-500/15 text-red-400 border-red-500/30" };
+  }
+
+  // Shingrix: 2 doses
+  if (name.includes("shingrix") || name.includes("zoster") || name.includes("shingles")) {
+    if (dose >= 2) {
+      return { status: "current", label: "Series Complete (Protected)", isUpToDate: true, badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" };
+    }
+    return { status: "due", label: "Dose 2 Due", isUpToDate: false, badgeColor: "bg-amber-500/15 text-amber-400 border-amber-500/30" };
+  }
+
+  // Pneumococcal, RSV, Hepatitis
+  if (diffYears < 5) {
+    return { status: "current", label: "Up to Date", isUpToDate: true, badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" };
+  }
+
+  return { status: "current", label: "Documented", isUpToDate: true, badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" };
+}
 
 // Default seed patient record
 export const DEFAULT_PATIENT_RECORD = {
@@ -661,6 +993,7 @@ export const DEFAULT_PATIENT_RECORD = {
     {
       id: "cond-rec-1",
       name: "Hypertension (Essential)",
+      plainName: "High Blood Pressure",
       region: "Heart / Thoracic Vasculature",
       onsetDate: "2018-05-14",
       status: "Controlled",
@@ -673,6 +1006,7 @@ export const DEFAULT_PATIENT_RECORD = {
     {
       id: "cond-rec-2",
       name: "Type 2 Diabetes Mellitus",
+      plainName: "Type 2 Diabetes (High Blood Sugar)",
       region: "Pancreas / Epigastric Abdomen",
       onsetDate: "2019-11-03",
       status: "Active",
@@ -685,6 +1019,7 @@ export const DEFAULT_PATIENT_RECORD = {
     {
       id: "cond-rec-3",
       name: "Osteoarthritis (Right Knee)",
+      plainName: "Right Knee Joint Wear & Tear",
       region: "Right Knee Joint (Medial Compartment)",
       onsetDate: "2016-08-22",
       status: "Treated / Status Post",
@@ -697,6 +1032,7 @@ export const DEFAULT_PATIENT_RECORD = {
     {
       id: "cond-rec-4",
       name: "Lumbar Spondylolisthesis (Spinal Hardware)",
+      plainName: "Lower Back Spine Stabilization with Screws",
       region: "Posterior Lumbar Spine (L4-S1)",
       onsetDate: "2019-03-20",
       status: "Surgically Fused / Hardware Stable",
@@ -712,6 +1048,7 @@ export const DEFAULT_PATIENT_RECORD = {
     {
       id: "surg-rec-1",
       name: "Laparoscopic Cholecystectomy",
+      plainName: "Gallbladder Removal Surgery",
       site: "Right Upper Quadrant (Gallbladder Bed)",
       surgeryDate: "2021-03-18",
       hospital: "Mass General Hospital",
@@ -724,6 +1061,7 @@ export const DEFAULT_PATIENT_RECORD = {
     {
       id: "surg-rec-2",
       name: "Total Knee Arthroplasty (Right)",
+      plainName: "Right Knee Joint Replacement",
       site: "Right Anterior Knee",
       surgeryDate: "2022-09-14",
       hospital: "New England Orthopedic Institute",
@@ -736,6 +1074,7 @@ export const DEFAULT_PATIENT_RECORD = {
     {
       id: "surg-rec-3",
       name: "Posterior Lumbar Spinal Fusion (L4-S1)",
+      plainName: "Lower Back Spine Fusion (Screws & Rods)",
       site: "Posterior Midline Lumbar Spine",
       surgeryDate: "2020-11-12",
       hospital: "Spine & Neuroscience Hospital",
@@ -745,6 +1084,74 @@ export const DEFAULT_PATIENT_RECORD = {
       system: "spine",
       isPosterior: true,
       notes: "L4-S1 bilateral pedicle screw fixation with titanium rods and interbody cage fusion. Intact posterior spinal instrumentation."
+    }
+  ],
+  procedures: [
+    {
+      id: "proc-rec-1",
+      procedure_name: "Screening Colonoscopy",
+      plainName: "Colon Camera Check (Colonoscopy)",
+      procedure_type: "screening",
+      date_performed: "2024-04-10",
+      anatomical_marker: "Lower Abdomen / Large Intestine",
+      coords: { x: 0.1, y: 1.8, z: 1.05 },
+      system: "digestive",
+      performing_clinician: "Dr. Marcus Vance, MD (Gastroenterology)",
+      institution: "Boston Endoscopy Center",
+      findings: "Two benign tubular adenomas (4mm and 6mm) resected from ascending colon with clean margins. No evidence of dysplasia or malignancy.",
+      recall_interval_years: 5
+    },
+    {
+      id: "proc-rec-2",
+      procedure_name: "Transthoracic Echocardiogram (Echo)",
+      plainName: "Heart Ultrasound (Echo)",
+      procedure_type: "diagnostic",
+      date_performed: "2025-01-15",
+      anatomical_marker: "Thorax / Heart",
+      coords: { x: 0.35, y: 4.35, z: 1.1 },
+      system: "cardiac",
+      performing_clinician: "Dr. Anthony Hayes, MD",
+      institution: "Heart & Vascular Center",
+      findings: "LVEF 55-60%, normal LV wall thickness, mild left atrial enlargement, trivial aortic regurgitation. Normal systolic dynamics.",
+      recall_interval_years: 1
+    }
+  ],
+  vaccinations: [
+    {
+      id: "vax-rec-1",
+      vaccine_name: "Influenza (Flu Quadrivalent)",
+      plainName: "Annual Flu Shot",
+      date_administered: "2025-10-12",
+      dose_number: 1,
+      administering_facility: "CVS MinuteClinic #04821 (Cambridge, MA)",
+      next_due_date: "2026-10-01"
+    },
+    {
+      id: "vax-rec-2",
+      vaccine_name: "COVID-19 Updated Booster (mRNA)",
+      plainName: "Updated COVID-19 Booster",
+      date_administered: "2025-10-12",
+      dose_number: 4,
+      administering_facility: "CVS MinuteClinic #04821 (Cambridge, MA)",
+      next_due_date: "2026-10-01"
+    },
+    {
+      id: "vax-rec-3",
+      vaccine_name: "Tdap (Tetanus, Diphtheria, Pertussis)",
+      plainName: "Tetanus & Whooping Cough Booster",
+      date_administered: "2019-06-15",
+      dose_number: 1,
+      administering_facility: "Mass General Hospital",
+      next_due_date: "2029-06-15"
+    },
+    {
+      id: "vax-rec-4",
+      vaccine_name: "Shingrix (Recombinant Zoster)",
+      plainName: "Shingles Vaccine (2 Doses)",
+      date_administered: "2023-08-20",
+      dose_number: 2,
+      administering_facility: "Metro Health Primary Care",
+      next_due_date: null
     }
   ],
   drains: [

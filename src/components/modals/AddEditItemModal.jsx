@@ -63,6 +63,28 @@ export function AddEditItemModal({
           system: "general",
           notes: ""
         });
+      } else if (type === "procedure") {
+        setFormData({
+          name: "",
+          procedure_type: "diagnostic",
+          date_performed: today,
+          anatomical_marker: "Lower Abdomen / Colon",
+          performing_clinician: "",
+          institution: "Endoscopy & Imaging Pavilion",
+          findings: "",
+          recall_interval_years: 1,
+          coords: { x: 0.1, y: 1.8, z: 1.05 },
+          system: "digestive"
+        });
+      } else if (type === "vaccine") {
+        setFormData({
+          name: "",
+          vaccine_name: "",
+          date_administered: today,
+          dose_number: 1,
+          administering_facility: "Local Pharmacy / Primary Care",
+          next_due_date: ""
+        });
       } else {
         setFormData({
           name: "",
@@ -83,21 +105,38 @@ export function AddEditItemModal({
 
   // Autocomplete matching against catalog
   const handleNameChange = (val) => {
-    setFormData((prev) => ({ ...prev, name: val }));
+    setFormData((prev) => ({
+      ...prev,
+      name: val,
+      ...(type === "vaccine" ? { vaccine_name: val } : {}),
+      ...(type === "procedure" ? { procedure_name: val } : {})
+    }));
 
     if (val.length >= 2) {
       let matches = [];
       if (type === "condition") {
         matches = CLINICAL_CATALOG.conditions.filter((c) =>
-          c.name.toLowerCase().includes(val.toLowerCase())
+          c.name.toLowerCase().includes(val.toLowerCase()) ||
+          (c.plainName && c.plainName.toLowerCase().includes(val.toLowerCase()))
         );
       } else if (type === "surgery") {
         matches = CLINICAL_CATALOG.surgeries.filter((s) =>
-          s.name.toLowerCase().includes(val.toLowerCase())
+          s.name.toLowerCase().includes(val.toLowerCase()) ||
+          (s.plainName && s.plainName.toLowerCase().includes(val.toLowerCase()))
         );
       } else if (type === "medication") {
         matches = CLINICAL_CATALOG.medications.filter((m) =>
           m.name.toLowerCase().includes(val.toLowerCase())
+        );
+      } else if (type === "procedure") {
+        matches = (CLINICAL_CATALOG.procedures || []).filter((p) =>
+          p.name.toLowerCase().includes(val.toLowerCase()) ||
+          (p.plainName && p.plainName.toLowerCase().includes(val.toLowerCase()))
+        );
+      } else if (type === "vaccine") {
+        matches = (CLINICAL_CATALOG.vaccines || []).filter((v) =>
+          v.name.toLowerCase().includes(val.toLowerCase()) ||
+          (v.plainName && v.plainName.toLowerCase().includes(val.toLowerCase()))
         );
       }
       setSuggestions(matches);
@@ -112,14 +151,24 @@ export function AddEditItemModal({
     setFormData((prev) => ({
       ...prev,
       ...catItem,
-      id: prev.id || undefined
+      name: catItem.name,
+      id: prev.id || undefined,
+      ...(type === "vaccine" ? { vaccine_name: catItem.name } : {}),
+      ...(type === "procedure" ? { procedure_name: catItem.name, anatomical_marker: catItem.anatomical_marker, recall_interval_years: catItem.defaultRecallYears } : {})
     }));
     setShowSuggestions(false);
   };
 
   const handleSubmit = (e) => {
     e.preventDefault();
-    onSave(formData);
+    const submission = { ...formData };
+    if (type === "vaccine") {
+      submission.vaccine_name = submission.vaccine_name || submission.name;
+    }
+    if (type === "procedure") {
+      submission.procedure_name = submission.procedure_name || submission.name;
+    }
+    onSave(submission);
     onClose();
   };
 
@@ -128,7 +177,9 @@ export function AddEditItemModal({
     drain: item ? "Edit Drain / Catheter" : "Add Patient Drain",
     surgery: item ? "Edit Surgical History" : "Add Surgical Procedure",
     condition: item ? "Edit Medical Condition" : "Add Medical Condition",
-    medication: item ? "Edit Medication" : "Add Medication"
+    medication: item ? "Edit Medication" : "Add Medication",
+    procedure: item ? "Edit Diagnostic Procedure" : "Add Diagnostic Procedure",
+    vaccine: item ? "Edit Immunization Record" : "Add Immunization Record"
   };
 
   return (
@@ -431,6 +482,146 @@ export function AddEditItemModal({
                     value={formData.daysSupply || ""}
                     onChange={(e) => setFormData({ ...formData, daysSupply: e.target.value })}
                     placeholder="e.g. 90-Day Supply"
+                    className="w-full text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+              </div>
+            </>
+          )}
+
+          {/* Procedure Fields */}
+          {type === "procedure" && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Anatomical Target / Organ Area</label>
+                  <input
+                    type="text"
+                    value={formData.anatomical_marker || ""}
+                    onChange={(e) => setFormData({ ...formData, anatomical_marker: e.target.value })}
+                    placeholder="e.g. Lower Abdomen / Colon, Heart, Lungs"
+                    className="w-full text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Date Performed</label>
+                  <input
+                    type="date"
+                    value={formData.date_performed || ""}
+                    onChange={(e) => setFormData({ ...formData, date_performed: e.target.value })}
+                    className="w-full text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Performing Clinician</label>
+                  <input
+                    type="text"
+                    value={formData.performing_clinician || ""}
+                    onChange={(e) => setFormData({ ...formData, performing_clinician: e.target.value })}
+                    placeholder="e.g. Dr. Marcus Vance, MD"
+                    className="w-full text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Facility / Institution</label>
+                  <input
+                    type="text"
+                    value={formData.institution || ""}
+                    onChange={(e) => setFormData({ ...formData, institution: e.target.value })}
+                    placeholder="e.g. Boston Endoscopy Center"
+                    className="w-full text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Procedure Type</label>
+                  <select
+                    value={formData.procedure_type || "diagnostic"}
+                    onChange={(e) => setFormData({ ...formData, procedure_type: e.target.value })}
+                    className="w-full text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                  >
+                    <option value="diagnostic">Diagnostic Exam</option>
+                    <option value="screening">Routine Screening</option>
+                    <option value="imaging">Imaging Scan (CT / MRI / Ultrasound)</option>
+                    <option value="interventional">Interventional / Biopsy</option>
+                  </select>
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Repeat Recall (Years)</label>
+                  <input
+                    type="number"
+                    min="0"
+                    max="15"
+                    value={formData.recall_interval_years ?? 1}
+                    onChange={(e) => setFormData({ ...formData, recall_interval_years: parseFloat(e.target.value) || 1 })}
+                    className="w-full text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              <div>
+                <label className="block text-xs font-medium text-slate-300 mb-1">Findings Summary</label>
+                <textarea
+                  value={formData.findings || ""}
+                  onChange={(e) => setFormData({ ...formData, findings: e.target.value })}
+                  placeholder="e.g. Benign polyps resected, clear margins; no evidence of dysplasia."
+                  rows={2}
+                  className="w-full text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                />
+              </div>
+            </>
+          )}
+
+          {/* Vaccine Fields */}
+          {type === "vaccine" && (
+            <>
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Date Administered</label>
+                  <input
+                    type="date"
+                    value={formData.date_administered || ""}
+                    onChange={(e) => setFormData({ ...formData, date_administered: e.target.value })}
+                    className="w-full text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                    required
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Dose Number</label>
+                  <input
+                    type="number"
+                    min="1"
+                    max="10"
+                    value={formData.dose_number ?? 1}
+                    onChange={(e) => setFormData({ ...formData, dose_number: parseInt(e.target.value, 10) || 1 })}
+                    className="w-full text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+              </div>
+
+              <div className="grid grid-cols-2 gap-3">
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Administering Facility</label>
+                  <input
+                    type="text"
+                    value={formData.administering_facility || ""}
+                    onChange={(e) => setFormData({ ...formData, administering_facility: e.target.value })}
+                    placeholder="e.g. CVS MinuteClinic #04821"
+                    className="w-full text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-sky-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-xs font-medium text-slate-300 mb-1">Next Due Date (Optional)</label>
+                  <input
+                    type="date"
+                    value={formData.next_due_date || ""}
+                    onChange={(e) => setFormData({ ...formData, next_due_date: e.target.value })}
                     className="w-full text-xs bg-slate-950 border border-slate-800 rounded-lg p-2 text-slate-100 focus:outline-none focus:border-sky-500"
                   />
                 </div>

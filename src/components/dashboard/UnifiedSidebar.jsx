@@ -4,6 +4,8 @@ import { DrainList } from "./DrainList";
 import { SurgeryList } from "./SurgeryList";
 import { ConditionList } from "./ConditionList";
 import { MedicationList } from "./MedicationList";
+import { ProcedureList } from "./ProcedureList";
+import { VaccineList } from "./VaccineList";
 import { ClinicalSummary } from "./ClinicalSummary";
 
 export function UnifiedSidebar({
@@ -16,6 +18,8 @@ export function UnifiedSidebar({
   filteredSurgeries,
   filteredConditions,
   filteredMedications,
+  filteredProcedures = [],
+  filteredVaccinations = [],
   focusedItem,
   onFocusItem,
   onFocusOrgan,
@@ -26,18 +30,22 @@ export function UnifiedSidebar({
   deleteSurgery,
   deleteCondition,
   deleteMedication,
+  deleteProcedure,
+  deleteVaccination,
   onToggleSidebar
 }) {
   const { profile } = patientData;
   const isSearching = Boolean(searchQuery && searchQuery.trim().length > 0);
   const [linesDrainsFilter, setLinesDrainsFilter] = useState("all"); // "all" | "lines" | "drains"
 
-  // Reorganized navigation tabs:
-  // 1. Summary (opens first!)
-  // 2. Medical History (reworded from Medical Conditions)
+  // 7 Streamlined Navigation Tabs:
+  // 1. Summary
+  // 2. Medical History
   // 3. Surgical History
   // 4. Medications
-  // 5. Lines / Drains (grouped under 1 tab with distinct icons and colors)
+  // 5. Procedures (Diagnostic & Screenings)
+  // 6. Vaccines (Immunizations)
+  // 7. Lines & Drains
   const tabs = [
     { key: "summary", label: "Summary", lines: ["Summary"] },
     {
@@ -53,6 +61,18 @@ export function UnifiedSidebar({
       count: filteredSurgeries.length
     },
     { key: "medications", label: "Medications", lines: ["Medications"], count: filteredMedications.length },
+    {
+      key: "procedures",
+      label: "Procedures",
+      lines: ["Procedures"],
+      count: filteredProcedures.length
+    },
+    {
+      key: "vaccines",
+      label: "Vaccines",
+      lines: ["Vaccines"],
+      count: filteredVaccinations.length
+    },
     {
       key: "lines_drains",
       label: "Lines / Drains",
@@ -212,6 +232,30 @@ export function UnifiedSidebar({
             onAddMedication={() => onOpenAdd("medication")}
             onEditMedication={(m) => onOpenEdit(m, "medication")}
             onDeleteMedication={deleteMedication}
+          />
+        )}
+
+        {/* Diagnostic Procedures Tab */}
+        {activeTab === "procedures" && (
+          <ProcedureList
+            procedures={filteredProcedures}
+            searchQuery={searchQuery}
+            focusedItem={focusedItem}
+            onFocusItem={onFocusItem}
+            onAddProcedure={() => onOpenAdd("procedure")}
+            onEditProcedure={(p) => onOpenEdit(p, "procedure")}
+            onDeleteProcedure={deleteProcedure}
+          />
+        )}
+
+        {/* Immunizations & Vaccines Tab */}
+        {activeTab === "vaccines" && (
+          <VaccineList
+            vaccinations={filteredVaccinations}
+            searchQuery={searchQuery}
+            onAddVaccination={(v) => onOpenAdd("vaccine", v)}
+            onEditVaccination={(v) => onOpenEdit(v, "vaccine")}
+            onDeleteVaccination={deleteVaccination}
           />
         )}
 

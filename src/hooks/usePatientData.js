@@ -13,6 +13,8 @@ export function usePatientData() {
         if (!parsed.drains) parsed.drains = DEFAULT_PATIENT_RECORD.drains || [];
         if (!parsed.lines) parsed.lines = DEFAULT_PATIENT_RECORD.lines || [];
         if (!parsed.allergiesList) parsed.allergiesList = DEFAULT_PATIENT_RECORD.allergiesList || [];
+        if (!parsed.procedures) parsed.procedures = DEFAULT_PATIENT_RECORD.procedures || [];
+        if (!parsed.vaccinations) parsed.vaccinations = DEFAULT_PATIENT_RECORD.vaccinations || [];
         parsed.profile = { ...DEFAULT_PATIENT_RECORD.profile, ...(parsed.profile || {}) };
         if (parsed.profile.veteranStatus && parsed.profile.veteranStatus.length > 3) {
           parsed.profile.veteranStatus = parsed.profile.veteranStatus.toLowerCase().includes("veteran") ? "Yes" : "No";
@@ -75,6 +77,7 @@ export function usePatientData() {
   const [user, setUser] = useState(null);
   const [authLoading, setAuthLoading] = useState(true);
   const [syncStatus, setSyncStatus] = useState("local"); // 'local' | 'synced' | 'syncing' | 'error'
+  const [isNewPatient, setIsNewPatient] = useState(false);
 
   // Save to local storage on any state change
   useEffect(() => {
@@ -100,6 +103,7 @@ export function usePatientData() {
         } else {
           setUser(null);
           setSyncStatus("local");
+          setIsNewPatient(false);
         }
       } catch (err) {
         console.warn("Auth check error, operating in local mode:", err);
@@ -119,6 +123,7 @@ export function usePatientData() {
       } else {
         setUser(null);
         setSyncStatus("local");
+        setIsNewPatient(false);
       }
     });
 
@@ -132,24 +137,45 @@ export function usePatientData() {
   const fetchRemoteData = async (userId) => {
     setSyncStatus("syncing");
     try {
-      const [profileRes, condsRes, surgsRes, medsRes] = await Promise.all([
+      const [profileRes, condsRes, surgsRes, medsRes, procsRes, vaxRes] = await Promise.all([
         supabase.from("patient_profile").select("*").eq("user_id", userId).maybeSingle(),
         supabase.from("patient_conditions").select("*").eq("user_id", userId),
         supabase.from("patient_surgeries").select("*").eq("user_id", userId),
-        supabase.from("patient_medications").select("*").eq("user_id", userId)
+        supabase.from("patient_medications").select("*").eq("user_id", userId),
+        supabase.from("patient_procedures").select("*").eq("user_id", userId),
+        supabase.from("patient_vaccinations").select("*").eq("user_id", userId)
       ]);
+
+      const totalRecords =
+        (condsRes.data?.length || 0) +
+        (surgsRes.data?.length || 0) +
+        (medsRes.data?.length || 0) +
+        (procsRes.data?.length || 0) +
+        (vaxRes.data?.length || 0);
+
+      // If user has zero health records in database, flag as new patient for onboarding
+      const isFirstTime = totalRecords === 0 && !profileRes.data?.dob;
+      setIsNewPatient(isFirstTime);
 
       const newConditions = (condsRes.data && condsRes.data.length > 0)
         ? condsRes.data
-        : patientData.conditions;
+        : (isFirstTime ? [] : patientData.conditions);
 
       const newSurgeries = (surgsRes.data && surgsRes.data.length > 0)
         ? surgsRes.data
-        : patientData.surgeries;
+        : (isFirstTime ? [] : patientData.surgeries);
 
       const newMedications = (medsRes.data && medsRes.data.length > 0)
         ? medsRes.data
-        : patientData.medications;
+        : (isFirstTime ? [] : patientData.medications);
+
+      const newProcedures = (procsRes.data && procsRes.data.length > 0)
+        ? procsRes.data
+        : (isFirstTime ? [] : (patientData.procedures || []));
+
+      const newVaccinations = (vaxRes.data && vaxRes.data.length > 0)
+        ? vaxRes.data
+        : (isFirstTime ? [] : (patientData.vaccinations || []));
 
       const newProfile = profileRes.data ? {
         name: profileRes.data.name || patientData.profile.name,
@@ -162,13 +188,22 @@ export function usePatientData() {
         pcp: profileRes.data.pcp || patientData.profile.pcp,
         emergencyContact: profileRes.data.emergency_contact || patientData.profile.emergencyContact,
         allergies: profileRes.data.allergies || patientData.profile.allergies
-      } : patientData.profile;
+      } : (isFirstTime ? {
+        ...patientData.profile,
+        name: user?.user_metadata?.full_name || user?.email?.split("@")[0] || "New Patient",
+        mrn: `#PT-${Math.floor(10000 + Math.random() * 90000)}`
+      } : patientData.profile);
 
       setPatientData({
         profile: newProfile,
         conditions: newConditions,
         surgeries: newSurgeries,
-        medications: newMedications
+        medications: newMedications,
+        procedures: newProcedures,
+        vaccinations: newVaccinations,
+        drains: isFirstTime ? [] : (patientData.drains || []),
+        lines: isFirstTime ? [] : (patientData.lines || []),
+        allergiesList: isFirstTime ? [] : (patientData.allergiesList || [])
       });
       setSyncStatus("synced");
     } catch (e) {
@@ -482,10 +517,276 @@ export function usePatientData() {
     }));
   }, []);
 
+  // Procedure CRUD
+  const addProcedure = useCallback((procedure) => {
+    const newProc = {
+      ...procedure,
+      id: procedure.id || `proc-${Date.now()}`,
+      procedure_name: procedure.procedure_name || procedure.name || "Diagnostic Procedure",
+      procedure_type: procedure.procedure_type || procedure.procedureType || "diagnostic",
+      date_performed: procedure.date_performed || procedure.datePerformed || new Date().toISOString().split("T")[0],
+      anatomical_marker: procedure.anatomical_marker || procedure.anatomicalMarker || "General",
+      performing_clinician: procedure.performing_clinician || procedure.performingClinician || "",
+      institution: procedure.institution || "",
+      findings: procedure.findings || "",
+      recall_interval_years: procedure.recall_interval_years !== undefined ? Number(procedure.recall_interval_years) : 1,
+      coords: procedure.coords || { x: 0.1, y: 1.8, z: 1.05 },
+      system: procedure.system || "general"
+    };
+    setPatientData(prev => {
+      const next = { ...prev, procedures: [newProc, ...(prev.procedures || [])] };
+      if (user) {
+        supabase.from("patient_procedures").insert({
+          id: newProc.id,
+          user_id: user.id,
+          procedure_name: newProc.procedure_name,
+          procedure_type: newProc.procedure_type,
+          date_performed: newProc.date_performed,
+          anatomical_marker: newProc.anatomical_marker,
+          performing_clinician: newProc.performing_clinician,
+          institution: newProc.institution,
+          findings: newProc.findings,
+          recall_interval_years: newProc.recall_interval_years
+        }).catch(console.error);
+      }
+      return next;
+    });
+    return newProc;
+  }, [user]);
+
+  const updateProcedure = useCallback((id, updates) => {
+    setPatientData(prev => {
+      const next = {
+        ...prev,
+        procedures: (prev.procedures || []).map(p => p.id === id ? { ...p, ...updates } : p)
+      };
+      if (user) {
+        const dbUpdates = { ...updates };
+        if (updates.name) dbUpdates.procedure_name = updates.name;
+        if (updates.procedureType) dbUpdates.procedure_type = updates.procedureType;
+        if (updates.datePerformed) dbUpdates.date_performed = updates.datePerformed;
+        if (updates.anatomicalMarker) dbUpdates.anatomical_marker = updates.anatomicalMarker;
+        if (updates.performingClinician) dbUpdates.performing_clinician = updates.performingClinician;
+        if (updates.recallIntervalYears !== undefined) dbUpdates.recall_interval_years = Number(updates.recallIntervalYears);
+
+        supabase.from("patient_procedures").update(dbUpdates).eq("id", id).eq("user_id", user.id).catch(console.error);
+      }
+      return next;
+    });
+  }, [user]);
+
+  const deleteProcedure = useCallback((id) => {
+    setPatientData(prev => {
+      const next = {
+        ...prev,
+        procedures: (prev.procedures || []).filter(p => p.id !== id)
+      };
+      if (user) {
+        supabase.from("patient_procedures").delete().eq("id", id).eq("user_id", user.id).catch(console.error);
+      }
+      return next;
+    });
+  }, [user]);
+
+  // Vaccination CRUD
+  const addVaccination = useCallback((vaccine) => {
+    const newVax = {
+      ...vaccine,
+      id: vaccine.id || `vax-${Date.now()}`,
+      vaccine_name: vaccine.vaccine_name || vaccine.name || "Immunization",
+      date_administered: vaccine.date_administered || vaccine.dateAdministered || new Date().toISOString().split("T")[0],
+      dose_number: Number(vaccine.dose_number || vaccine.doseNumber || 1),
+      administering_facility: vaccine.administering_facility || vaccine.administeringFacility || "",
+      next_due_date: vaccine.next_due_date || vaccine.nextDueDate || null
+    };
+    setPatientData(prev => {
+      const next = { ...prev, vaccinations: [newVax, ...(prev.vaccinations || [])] };
+      if (user) {
+        supabase.from("patient_vaccinations").insert({
+          id: newVax.id,
+          user_id: user.id,
+          vaccine_name: newVax.vaccine_name,
+          date_administered: newVax.date_administered,
+          dose_number: newVax.dose_number,
+          administering_facility: newVax.administering_facility,
+          next_due_date: newVax.next_due_date
+        }).catch(console.error);
+      }
+      return next;
+    });
+    return newVax;
+  }, [user]);
+
+  const updateVaccination = useCallback((id, updates) => {
+    setPatientData(prev => {
+      const next = {
+        ...prev,
+        vaccinations: (prev.vaccinations || []).map(v => v.id === id ? { ...v, ...updates } : v)
+      };
+      if (user) {
+        const dbUpdates = { ...updates };
+        if (updates.name) dbUpdates.vaccine_name = updates.name;
+        if (updates.dateAdministered) dbUpdates.date_administered = updates.dateAdministered;
+        if (updates.doseNumber !== undefined) dbUpdates.dose_number = Number(updates.doseNumber);
+        if (updates.administeringFacility) dbUpdates.administering_facility = updates.administeringFacility;
+        if (updates.nextDueDate !== undefined) dbUpdates.next_due_date = updates.nextDueDate;
+
+        supabase.from("patient_vaccinations").update(dbUpdates).eq("id", id).eq("user_id", user.id).catch(console.error);
+      }
+      return next;
+    });
+  }, [user]);
+
+  const deleteVaccination = useCallback((id) => {
+    setPatientData(prev => {
+      const next = {
+        ...prev,
+        vaccinations: (prev.vaccinations || []).filter(v => v.id !== id)
+      };
+      if (user) {
+        supabase.from("patient_vaccinations").delete().eq("id", id).eq("user_id", user.id).catch(console.error);
+      }
+      return next;
+    });
+  }, [user]);
+
+  // Batch commit onboarding data (from Intake Wizard or PDF Import)
+  const batchCommitOnboardingData = useCallback(async (payload) => {
+    const updatedProfile = {
+      ...patientData.profile,
+      ...(payload.profile || {})
+    };
+
+    const newConditions = payload.conditions !== undefined ? payload.conditions : patientData.conditions;
+    const newSurgeries = payload.surgeries !== undefined ? payload.surgeries : patientData.surgeries;
+    const newMedications = payload.medications !== undefined ? payload.medications : patientData.medications;
+    const newProcedures = payload.procedures !== undefined ? payload.procedures : (patientData.procedures || []);
+    const newVaccinations = payload.vaccinations !== undefined ? payload.vaccinations : (patientData.vaccinations || []);
+
+    const updated = {
+      ...patientData,
+      profile: updatedProfile,
+      conditions: newConditions,
+      surgeries: newSurgeries,
+      medications: newMedications,
+      procedures: newProcedures,
+      vaccinations: newVaccinations
+    };
+
+    setPatientData(updated);
+    setIsNewPatient(false);
+
+    if (user) {
+      setSyncStatus("syncing");
+      try {
+        await supabase.from("patient_profile").upsert({
+          user_id: user.id,
+          name: updatedProfile.name,
+          dob: updatedProfile.dob,
+          age: updatedProfile.age,
+          sex: updatedProfile.sex,
+          build: updatedProfile.build,
+          skin_tone: updatedProfile.skinTone,
+          mrn: updatedProfile.mrn,
+          pcp: updatedProfile.pcp,
+          emergency_contact: updatedProfile.emergencyContact,
+          allergies: updatedProfile.allergies,
+          updated_at: new Date().toISOString()
+        });
+
+        if (newConditions.length > 0) {
+          const rows = newConditions.map(c => ({
+            id: c.id || `cond-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            user_id: user.id,
+            name: c.name,
+            region: c.region || "General",
+            icd10: c.icd10 || null,
+            onset_date: c.onsetDate || c.onset_date || null,
+            status: c.status || "Active",
+            provider: c.provider || null,
+            coords: c.coords || { x: 0, y: 3.5, z: 1.0 },
+            system: c.system || "general",
+            notes: c.notes || null
+          }));
+          await supabase.from("patient_conditions").upsert(rows);
+        }
+
+        if (newSurgeries.length > 0) {
+          const rows = newSurgeries.map(s => ({
+            id: s.id || `surg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            user_id: user.id,
+            name: s.name,
+            site: s.site || "General",
+            surgery_date: s.surgeryDate || s.surgery_date || null,
+            hospital: s.hospital || null,
+            surgeon: s.surgeon || null,
+            incision: s.incision || null,
+            coords: s.coords || { x: 0, y: 3.0, z: 1.0 },
+            system: s.system || "general",
+            notes: s.notes || null
+          }));
+          await supabase.from("patient_surgeries").upsert(rows);
+        }
+
+        if (newMedications.length > 0) {
+          const rows = newMedications.map(m => ({
+            id: m.id || `med-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            user_id: user.id,
+            name: m.name,
+            dosage: m.dosage || "Standard Dose",
+            route: m.route || "Oral (PO)",
+            frequency: m.frequency || "Once Daily",
+            indication: m.indication || "",
+            start_date: m.startDate || m.start_date || null,
+            prescriber: m.prescriber || null,
+            system: m.system || "general",
+            notes: m.notes || null
+          }));
+          await supabase.from("patient_medications").upsert(rows);
+        }
+
+        if (newProcedures.length > 0) {
+          const rows = newProcedures.map(p => ({
+            id: p.id || `proc-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            user_id: user.id,
+            procedure_name: p.procedure_name || p.name,
+            procedure_type: p.procedure_type || p.procedureType || "diagnostic",
+            date_performed: p.date_performed || p.datePerformed || null,
+            anatomical_marker: p.anatomical_marker || p.anatomicalMarker || "General",
+            performing_clinician: p.performing_clinician || p.performingClinician || null,
+            institution: p.institution || null,
+            findings: p.findings || null,
+            recall_interval_years: p.recall_interval_years ? Number(p.recall_interval_years) : null
+          }));
+          await supabase.from("patient_procedures").upsert(rows);
+        }
+
+        if (newVaccinations.length > 0) {
+          const rows = newVaccinations.map(v => ({
+            id: v.id || `vax-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+            user_id: user.id,
+            vaccine_name: v.vaccine_name || v.name,
+            date_administered: v.date_administered || v.dateAdministered || null,
+            dose_number: v.dose_number ? Number(v.dose_number) : 1,
+            administering_facility: v.administering_facility || v.administeringFacility || null,
+            next_due_date: v.next_due_date || v.nextDueDate || null
+          }));
+          await supabase.from("patient_vaccinations").upsert(rows);
+        }
+
+        setSyncStatus("synced");
+      } catch (err) {
+        console.error("Batch commit to Supabase error:", err);
+        setSyncStatus("error");
+      }
+    }
+  }, [user, patientData]);
+
   // Reset to default seed
   const resetToDefault = useCallback(() => {
     const defaultData = JSON.parse(JSON.stringify(DEFAULT_PATIENT_RECORD));
     setPatientData(defaultData);
+    setIsNewPatient(false);
     localStorage.removeItem(STORAGE_KEY);
   }, []);
 
@@ -494,6 +795,8 @@ export function usePatientData() {
     user,
     authLoading,
     syncStatus,
+    isNewPatient,
+    setIsNewPatient,
     updateProfile,
     addAllergy,
     updateAllergy,
@@ -513,6 +816,13 @@ export function usePatientData() {
     addMedication,
     updateMedication,
     deleteMedication,
+    addProcedure,
+    updateProcedure,
+    deleteProcedure,
+    addVaccination,
+    updateVaccination,
+    deleteVaccination,
+    batchCommitOnboardingData,
     resetToDefault
   };
 }

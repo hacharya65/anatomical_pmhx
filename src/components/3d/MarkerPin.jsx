@@ -92,6 +92,17 @@ export function MarkerPin({
         <path d="m8.5 8.5 7 7" />
       </svg>
     );
+  } else if (category === "procedure") {
+    // 🌐 Sky Blue: Diagnostic Procedures & Screenings
+    badgeColor = "#0284c7";
+    badgeBorder = "#0369a1";
+    badgeBg = "#f0f9ff";
+    iconSvg = (
+      <svg className="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="11" cy="11" r="8" />
+        <path d="m21 21-4.3-4.3" />
+      </svg>
+    );
   } else {
     // 🟡 Amber: Conditions & Chronic Diagnoses (Pulse / Heartbeat)
     badgeColor = "#d97706";
@@ -286,7 +297,9 @@ export function MarkerPin({
                       ? "Surgery"
                       : category === "medication"
                       ? "Prescription Rx"
-                      : "Condition"}
+                      : category === "procedure"
+                      ? "Procedure"
+                      : "Medical Condition"}
                   </span>
 
                   {/* Close Dismiss Button */}
@@ -329,6 +342,18 @@ export function MarkerPin({
                           </span>
                         )}
                       </div>
+                    ) : category === "procedure" ? (
+                      <div className="flex flex-wrap items-center gap-1 mt-0.5">
+                        <span className="inline-flex items-center gap-1 text-[8.5px] font-medium px-1 py-0.5 rounded border bg-sky-50 text-sky-800 border-sky-200">
+                          <MapPin className="w-2.5 h-2.5 text-sky-600" />
+                          {item.region || item.anatomical_marker || "Diagnostic Area"}
+                        </span>
+                        {item.procedure_type && (
+                          <span className="text-[8px] uppercase font-bold text-sky-800 bg-sky-50/70 px-1 py-0.5 rounded border border-sky-200">
+                            {item.procedure_type}
+                          </span>
+                        )}
+                      </div>
                     ) : (
                       <div className="flex flex-wrap items-center gap-1 mt-0.5">
                         <span className="inline-flex items-center gap-1 text-[8.5px] font-medium px-1 py-0.5 rounded border bg-teal-50 text-teal-800 border-teal-200">
@@ -343,6 +368,26 @@ export function MarkerPin({
                       </div>
                     )}
                   </div>
+
+                  {/* Diagnostic Procedure Details */}
+                  {category === "procedure" && (
+                    <div className="p-1.5 rounded border space-y-0.5 bg-sky-50/70 border-sky-200 text-sky-950">
+                      <div className="flex items-center gap-1 text-[8.5px] font-bold text-sky-900">
+                        <Activity className="w-2.5 h-2.5 text-sky-700 shrink-0" />
+                        <span>Performed: {item.date_performed || item.datePerformed || "Documented"}</span>
+                      </div>
+                      {item.findings && (
+                        <p className="text-[8px] text-sky-850 leading-snug pt-0.5">
+                          <strong>Findings:</strong> {item.findings}
+                        </p>
+                      )}
+                      {item.recall_interval_years && (
+                        <div className="text-[7.5px] font-bold text-sky-700 pt-0.5">
+                          Recall: Repeat every {item.recall_interval_years} {item.recall_interval_years === 1 ? "Year" : "Years"}
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Surgical Incision Geometry */}
                   {category === "surgery" && item.incision && (

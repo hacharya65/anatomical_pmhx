@@ -178,11 +178,40 @@ create table if not exists public.patient_medications (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- 5. Patient Procedures Table (Diagnostic studies, endoscopies, imaging)
+create table if not exists public.patient_procedures (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  procedure_name text not null,
+  procedure_type text default 'diagnostic',
+  date_performed date,
+  anatomical_marker text,
+  performing_clinician text,
+  institution text,
+  findings text,
+  recall_interval_years numeric,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
+-- 6. Patient Vaccinations Table (Immunizations & boosters)
+create table if not exists public.patient_vaccinations (
+  id uuid primary key default gen_random_uuid(),
+  user_id uuid references auth.users(id) on delete cascade not null,
+  vaccine_name text not null,
+  date_administered date,
+  dose_number int default 1,
+  administering_facility text,
+  next_due_date date,
+  created_at timestamp with time zone default timezone('utc'::text, now()) not null
+);
+
 -- Row Level Security (RLS) Policies
 alter table public.patient_profile enable row level security;
 alter table public.patient_conditions enable row level security;
 alter table public.patient_surgeries enable row level security;
 alter table public.patient_medications enable row level security;
+alter table public.patient_procedures enable row level security;
+alter table public.patient_vaccinations enable row level security;
 
 -- Profile Policies
 create policy "Users can manage own profile" on public.patient_profile
@@ -198,5 +227,13 @@ create policy "Users can manage own surgeries" on public.patient_surgeries
 
 -- Medications Policies
 create policy "Users can manage own medications" on public.patient_medications
+  for all using (auth.uid() = user_id);
+
+-- Procedures Policies
+create policy "Users can manage own procedures" on public.patient_procedures
+  for all using (auth.uid() = user_id);
+
+-- Vaccinations Policies
+create policy "Users can manage own vaccinations" on public.patient_vaccinations
   for all using (auth.uid() = user_id);
 `;

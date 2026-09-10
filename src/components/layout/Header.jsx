@@ -12,7 +12,8 @@ import {
   HelpCircle,
   LogOut,
   Sparkles,
-  Award
+  Award,
+  Upload
 } from "lucide-react";
 
 export function Header({
@@ -22,6 +23,7 @@ export function Header({
   onSearchKeyDown,
   onOpenDemographics,
   onOpenHelp,
+  onOpenOnboarding,
   onSignOut,
   user,
   syncStatus,
@@ -134,8 +136,20 @@ export function Header({
         </div>
       </div>
 
-      {/* 3. Controls: Help & FAQ + Status + Sign Out */}
+      {/* 3. Controls: Import/Intake + Help & FAQ + Status + Sign Out */}
       <div className="flex items-center gap-2 shrink-0">
+        {/* Import & Intake Flow Button */}
+        <button
+          type="button"
+          onClick={onOpenOnboarding}
+          className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border shadow-xs transition-all bg-white border-slate-300 text-slate-700 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-300"
+          title="Patient Intake & Smart Health Record Import"
+          aria-label="Patient Intake & Import"
+        >
+          <Upload className="w-3.5 h-3.5 text-teal-700" />
+          <span className="hidden sm:inline">Import / Intake</span>
+        </button>
+
         {/* Help & FAQ Center Button */}
         <button
           id="tour-help-button"

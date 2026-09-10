@@ -7,6 +7,7 @@ import { AuthModal } from "./components/modals/AuthModal";
 import { AddEditItemModal } from "./components/modals/AddEditItemModal";
 import { HelpModal } from "./components/modals/HelpModal";
 import { GuidedTour } from "./components/modals/GuidedTour";
+import { PatientOnboardingModal } from "./components/modals/PatientOnboardingModal";
 import { usePatientData } from "./hooks/usePatientData";
 import { isItemRelevantForPerspective } from "./lib/clinicalCatalog";
 import { LoginView } from "./components/auth/LoginView";
@@ -19,6 +20,8 @@ export default function App() {
     user,
     authLoading,
     syncStatus,
+    isNewPatient,
+    setIsNewPatient,
     updateProfile,
     addAllergy,
     updateAllergy,
@@ -37,7 +40,14 @@ export default function App() {
     deleteLine,
     addMedication,
     updateMedication,
-    deleteMedication
+    deleteMedication,
+    addProcedure,
+    updateProcedure,
+    deleteProcedure,
+    addVaccination,
+    updateVaccination,
+    deleteVaccination,
+    batchCommitOnboardingData
   } = usePatientData();
 
   // Navigation & 3D interaction state
@@ -47,6 +57,14 @@ export default function App() {
   const [focusedItem, setFocusedItem] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
+  const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
+
+  // Auto-launch onboarding modal if authenticated user is newly registered with zero records
+  useEffect(() => {
+    if (isNewPatient) {
+      setIsOnboardingOpen(true);
+    }
+  }, [isNewPatient]);
 
   // Demo mode state: allows bypassing login to view Elena Vance immediately
   const [isDemoMode, setIsDemoMode] = useState(() => {
@@ -200,6 +218,35 @@ export default function App() {
     );
   }, [patientData.medications, searchQuery]);
 
+  const filteredProcedures = useMemo(() => {
+    const procs = patientData.procedures || [];
+    if (!searchQuery) return procs;
+    const q = searchQuery.toLowerCase().trim();
+    return procs.filter(
+      (p) =>
+        (p.procedure_name && p.procedure_name.toLowerCase().includes(q)) ||
+        (p.name && p.name.toLowerCase().includes(q)) ||
+        (p.plainName && p.plainName.toLowerCase().includes(q)) ||
+        (p.anatomical_marker && p.anatomical_marker.toLowerCase().includes(q)) ||
+        (p.performing_clinician && p.performing_clinician.toLowerCase().includes(q)) ||
+        (p.institution && p.institution.toLowerCase().includes(q)) ||
+        (p.findings && p.findings.toLowerCase().includes(q))
+    );
+  }, [patientData.procedures, searchQuery]);
+
+  const filteredVaccinations = useMemo(() => {
+    const vax = patientData.vaccinations || [];
+    if (!searchQuery) return vax;
+    const q = searchQuery.toLowerCase().trim();
+    return vax.filter(
+      (v) =>
+        (v.vaccine_name && v.vaccine_name.toLowerCase().includes(q)) ||
+        (v.name && v.name.toLowerCase().includes(q)) ||
+        (v.plainName && v.plainName.toLowerCase().includes(q)) ||
+        (v.administering_facility && v.administering_facility.toLowerCase().includes(q))
+    );
+  }, [patientData.vaccinations, searchQuery]);
+
   // Aggregate all matches across categories
   const allMatches = useMemo(() => {
     if (!searchQuery.trim()) return [];
@@ -208,13 +255,13 @@ export default function App() {
       ...filteredDrains.map((d) => ({ ...d, tabKey: "drains", itemType: "drain" })),
       ...filteredSurgeries.map((s) => ({ ...s, tabKey: "surgeries", itemType: "surgery" })),
       ...filteredConditions.map((c) => ({ ...c, tabKey: "conditions", itemType: "condition" })),
-      ...filteredMedications.map((m) => ({ ...m, tabKey: "medications", itemType: "medication" }))
+      ...filteredMedications.map((m) => ({ ...m, tabKey: "medications", itemType: "medication" })),
+      ...filteredProcedures.map((p) => ({ ...p, tabKey: "procedures", itemType: "procedure", name: p.procedure_name || p.name })),
+      ...filteredVaccinations.map((v) => ({ ...v, tabKey: "vaccines", itemType: "vaccine", name: v.vaccine_name || v.name }))
     ];
-  }, [searchQuery, filteredLines, filteredDrains, filteredSurgeries, filteredConditions, filteredMedications]);
+  }, [searchQuery, filteredLines, filteredDrains, filteredSurgeries, filteredConditions, filteredMedications, filteredProcedures, filteredVaccinations]);
 
   // Automatic Tab Switching on Search:
-  // When searching, automatically jump to the tab containing the matched item
-  // (e.g. searching "cholecystectomy" while on "lines" automatically moves over to "surgeries")
   useEffect(() => {
     const q = searchQuery.trim().toLowerCase();
     if (!q) return;
@@ -224,6 +271,8 @@ export default function App() {
       conditions: filteredConditions.length,
       surgeries: filteredSurgeries.length,
       medications: filteredMedications.length,
+      procedures: filteredProcedures.length,
+      vaccines: filteredVaccinations.length,
       lines_drains: filteredLines.length + filteredDrains.length
     };
 
@@ -233,7 +282,7 @@ export default function App() {
     }
 
     // Otherwise, find the tab that contains the matched item(s)
-    const tabOrder = ["conditions", "surgeries", "medications", "lines_drains"];
+    const tabOrder = ["conditions", "surgeries", "medications", "procedures", "vaccines", "lines_drains"];
     let bestTab = null;
     let maxCount = 0;
 
@@ -334,6 +383,12 @@ export default function App() {
     } else if (type === "medication") {
       if (item) updateMedication(item.id, itemData);
       else addMedication(itemData);
+    } else if (type === "procedure") {
+      if (item) updateProcedure(item.id, itemData);
+      else addProcedure(itemData);
+    } else if (type === "vaccine") {
+      if (item) updateVaccination(item.id, itemData);
+      else addVaccination(itemData);
     }
   };
 
@@ -370,6 +425,7 @@ export default function App() {
         onSearchKeyDown={handleSearchKeyDown}
         onOpenDemographics={() => setIsDemographicsOpen(true)}
         onOpenHelp={() => setIsHelpOpen(true)}
+        onOpenOnboarding={() => setIsOnboardingOpen(true)}
         onSignOut={handleSignOut}
         user={user}
         syncStatus={syncStatus}
@@ -387,13 +443,14 @@ export default function App() {
             drains={filteredDrains}
             lines={filteredLines}
             medications={filteredMedications}
+            procedures={filteredProcedures}
             focusedItem={focusedItem}
             perspective={perspective}
             hideMarkers={isDemographicsOpen}
             onSelectItem={handleFocusItem}
             onResetFocus={handleResetFocus}
             onEditItem={(item) => {
-              const itemCat = item.category || item.itemType || (item.dosage ? "medication" : "condition");
+              const itemCat = item.category || item.itemType || (item.dosage ? "medication" : item.procedure_name ? "procedure" : "condition");
               handleOpenEdit(item, itemCat);
             }}
             onPerspectiveChange={setPerspective}
@@ -440,6 +497,8 @@ export default function App() {
               filteredSurgeries={filteredSurgeries}
               filteredConditions={filteredConditions}
               filteredMedications={filteredMedications}
+              filteredProcedures={filteredProcedures}
+              filteredVaccinations={filteredVaccinations}
               focusedItem={focusedItem}
               onFocusItem={handleFocusItem}
               onFocusOrgan={handleFocusOrgan}
@@ -450,12 +509,24 @@ export default function App() {
               deleteSurgery={deleteSurgery}
               deleteCondition={deleteCondition}
               deleteMedication={deleteMedication}
+              deleteProcedure={deleteProcedure}
+              deleteVaccination={deleteVaccination}
             />
           </div>
         </div>
       </div>
 
       {/* Modals */}
+      <PatientOnboardingModal
+        isOpen={isOnboardingOpen}
+        onClose={() => {
+          setIsOnboardingOpen(false);
+          setIsNewPatient(false);
+        }}
+        initialProfile={patientData.profile}
+        onBatchCommit={batchCommitOnboardingData}
+      />
+
       <DemographicModal
         isOpen={isDemographicsOpen}
         onClose={() => setIsDemographicsOpen(false)}
