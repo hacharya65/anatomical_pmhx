@@ -5,6 +5,7 @@ import { SurgeryList } from "./SurgeryList";
 import { ConditionList } from "./ConditionList";
 import { MedicationList } from "./MedicationList";
 import { ClinicalSummary } from "./ClinicalSummary";
+import { PanelRightClose } from "lucide-react";
 
 export function UnifiedSidebar({
   activeTab,
@@ -25,7 +26,8 @@ export function UnifiedSidebar({
   deleteDrain,
   deleteSurgery,
   deleteCondition,
-  deleteMedication
+  deleteMedication,
+  onToggleSidebar
 }) {
   const { profile } = patientData;
   const isSearching = Boolean(searchQuery && searchQuery.trim().length > 0);
@@ -52,30 +54,34 @@ export function UnifiedSidebar({
   ];
 
   return (
-    <aside id="tour-unified-sidebar" className="w-full lg:w-[540px] xl:w-[560px] h-full flex flex-col border-l shadow-xl z-20 select-none bg-white border-slate-200 text-slate-800">
-      {/* 1. Unified Navigation Tabs across top of sidebar */}
-      <div id="tour-sidebar-tabs" className="border-b px-2 pt-2 flex items-center justify-between gap-1 bg-slate-50 border-slate-200 overflow-x-auto scrollbar-none">
-        {tabs.map((tab) => {
-          const isActive = activeTab === tab.key;
-          const hasMatches = isSearching && tab.count > 0;
-          const isZeroMatches = isSearching && tab.count === 0 && tab.key !== "summary";
+    <aside
+      id="tour-unified-sidebar"
+      className="w-full lg:w-[580px] xl:w-[620px] h-full flex flex-col border-l shadow-xl z-20 select-none bg-white border-slate-200 text-slate-800 transition-all"
+    >
+      {/* 1. Unified Navigation Tabs across top of sidebar (Expanded to eliminate sideways scrolling) */}
+      <div id="tour-sidebar-tabs" className="border-b px-2 pt-2 flex items-center justify-between gap-1 bg-slate-50 border-slate-200">
+        <div className="flex items-center gap-1 flex-1 min-w-0">
+          {tabs.map((tab) => {
+            const isActive = activeTab === tab.key;
+            const hasMatches = isSearching && tab.count > 0;
+            const isZeroMatches = isSearching && tab.count === 0 && tab.key !== "summary";
 
-          return (
-            <button
-              key={tab.key}
-              type="button"
-              onClick={() => onTabChange(tab.key)}
-              className={`flex-1 py-2 px-1 text-xs font-semibold rounded-t-lg transition-all flex items-center justify-center gap-1.5 border-b-2 whitespace-nowrap ${
-                isActive
-                  ? "text-teal-800 border-teal-700 bg-white shadow-xs font-bold"
-                  : isZeroMatches
-                  ? "text-slate-400 border-transparent opacity-60 hover:opacity-100 hover:text-slate-700 hover:bg-slate-100/60"
-                  : hasMatches
-                  ? "text-teal-700 border-transparent hover:bg-teal-50/60 font-semibold"
-                  : "text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-100/60"
-              }`}
-            >
-              <span>{tab.label}</span>
+            return (
+              <button
+                key={tab.key}
+                type="button"
+                onClick={() => onTabChange(tab.key)}
+                className={`flex-1 min-w-0 py-2 px-1 text-[11px] xl:text-xs font-semibold rounded-t-lg transition-all flex items-center justify-center gap-1 border-b-2 ${
+                  isActive
+                    ? "text-teal-800 border-teal-700 bg-white shadow-xs font-bold"
+                    : isZeroMatches
+                    ? "text-slate-400 border-transparent opacity-60 hover:opacity-100 hover:text-slate-700 hover:bg-slate-100/60"
+                    : hasMatches
+                    ? "text-teal-700 border-transparent hover:bg-teal-50/60 font-semibold"
+                    : "text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-100/60"
+                }`}
+              >
+                <span className="truncate">{tab.label}</span>
 
               {/* Special grouped badge for Lines / Drains keeping individual colors and icons */}
               {tab.key === "lines_drains" ? (
@@ -138,6 +144,20 @@ export function UnifiedSidebar({
             </button>
           );
         })}
+        </div>
+
+        {/* Sidebar Collapse Button */}
+        {onToggleSidebar && (
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/80 transition-colors shrink-0 ml-0.5 mb-1"
+            title="Collapse sidebar to center 3D avatar"
+            aria-label="Collapse sidebar"
+          >
+            <PanelRightClose className="w-4 h-4" />
+          </button>
+        )}
       </div>
 
       {/* 2. Feed Content */}

@@ -11,6 +11,7 @@ import { usePatientData } from "./hooks/usePatientData";
 import { isItemRelevantForPerspective } from "./lib/clinicalCatalog";
 import { LoginView } from "./components/auth/LoginView";
 import { supabase } from "./lib/supabase";
+import { PanelRightOpen } from "lucide-react";
 
 export default function App() {
   const {
@@ -45,6 +46,7 @@ export default function App() {
   const [perspective, setPerspective] = useState("anterior");
   const [focusedItem, setFocusedItem] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
+  const [isSidebarOpen, setIsSidebarOpen] = useState(true);
 
   // Demo mode state: allows bypassing login to view Elena Vance immediately
   const [isDemoMode, setIsDemoMode] = useState(() => {
@@ -372,12 +374,28 @@ export default function App() {
         user={user}
         syncStatus={syncStatus}
         isDemoMode={isDemoMode}
+        isSidebarOpen={isSidebarOpen}
+        onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
       />
 
       {/* 2. Main Clinical Workstation: 3D Scene (Left) + Unified Sidebar (Right) */}
       <div className="flex-1 flex overflow-hidden relative">
-        {/* 3D Scene Viewport (Main Canvas) */}
-        <main className="flex-1 h-full relative overflow-hidden">
+        {/* 3D Scene Viewport (Main Canvas - Centers automatically when sidebar is closed) */}
+        <main className="flex-1 h-full relative overflow-hidden bg-slate-100/50">
+          {/* Floating button to reopen sidebar when collapsed */}
+          {!isSidebarOpen && (
+            <button
+              type="button"
+              onClick={() => setIsSidebarOpen(true)}
+              className="absolute top-4 right-4 z-30 flex items-center gap-2 px-3 py-2 rounded-xl bg-white/95 backdrop-blur-md border border-slate-300 shadow-lg text-slate-800 hover:text-teal-700 hover:border-teal-500 font-bold text-xs transition-all animate-in fade-in group"
+              title="Open patient records & clinical sidebar"
+              aria-label="Open sidebar"
+            >
+              <PanelRightOpen className="w-4 h-4 text-teal-600 group-hover:translate-x-0.5 transition-transform" />
+              <span>Open Patient Panel</span>
+            </button>
+          )}
+
           <Scene
             profile={patientData.profile}
             conditions={filteredConditions}
@@ -399,28 +417,31 @@ export default function App() {
           />
         </main>
 
-        {/* Unified Right Sidebar: All 6 tabs visible without scrolling */}
-        <UnifiedSidebar
-          activeTab={activeTab}
-          onTabChange={setActiveTab}
-          searchQuery={searchQuery}
-          patientData={patientData}
-          filteredLines={filteredLines}
-          filteredDrains={filteredDrains}
-          filteredSurgeries={filteredSurgeries}
-          filteredConditions={filteredConditions}
-          filteredMedications={filteredMedications}
-          focusedItem={focusedItem}
-          onFocusItem={handleFocusItem}
-          onFocusOrgan={handleFocusOrgan}
-          onOpenAdd={handleOpenAdd}
-          onOpenEdit={handleOpenEdit}
-          deleteLine={deleteLine}
-          deleteDrain={deleteDrain}
-          deleteSurgery={deleteSurgery}
-          deleteCondition={deleteCondition}
-          deleteMedication={deleteMedication}
-        />
+        {/* Unified Right Sidebar: Conditionally rendered with close function */}
+        {isSidebarOpen && (
+          <UnifiedSidebar
+            activeTab={activeTab}
+            onTabChange={setActiveTab}
+            onToggleSidebar={() => setIsSidebarOpen(false)}
+            searchQuery={searchQuery}
+            patientData={patientData}
+            filteredLines={filteredLines}
+            filteredDrains={filteredDrains}
+            filteredSurgeries={filteredSurgeries}
+            filteredConditions={filteredConditions}
+            filteredMedications={filteredMedications}
+            focusedItem={focusedItem}
+            onFocusItem={handleFocusItem}
+            onFocusOrgan={handleFocusOrgan}
+            onOpenAdd={handleOpenAdd}
+            onOpenEdit={handleOpenEdit}
+            deleteLine={deleteLine}
+            deleteDrain={deleteDrain}
+            deleteSurgery={deleteSurgery}
+            deleteCondition={deleteCondition}
+            deleteMedication={deleteMedication}
+          />
+        )}
       </div>
 
       {/* Modals */}

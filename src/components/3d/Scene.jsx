@@ -11,12 +11,20 @@ import { isItemRelevantForPerspective } from "../../lib/clinicalCatalog";
 
 /**
  * Camera Rig maintaining stable overview framing without groin fly-through.
- * Allows locking/disabling zoom to prevent accidental wheel scrolling,
- * and provides instant 1-click baseline zoom reset.
+ * - Supports complete view lock (disables both avatar spin rotation AND zoom)
+ * - Continuously monitors viewing angle relative to avatar to dynamically surface
+ *   posterior/anterior clinical history when orbiting manually.
+ * - Provides instant 1-click baseline zoom reset.
  */
-function CameraRig({ resetTrigger, allowZoom = false }) {
+function CameraRig({
+  resetTrigger,
+  isLocked = true,
+  turntableAngleRef,
+  onFacingChange
+}) {
   const controlsRef = useRef();
   const { camera } = useThree();
+  const currentFacingRef = useRef("anterior");
 
   useEffect(() => {
     if (controlsRef.current) {
@@ -28,14 +36,39 @@ function CameraRig({ resetTrigger, allowZoom = false }) {
     }
   }, [resetTrigger, camera]);
 
+  // Continuously evaluate camera azimuth relative to avatar rotation
+  useFrame(() => {
+    if (!controlsRef.current) return;
+    const camAzimuth = Math.atan2(camera.position.x, camera.position.z);
+    const turntableAngle = (turntableAngleRef && turntableAngleRef.current) || 0;
+    const relAngle = camAzimuth - turntableAngle;
+    const cosVal = Math.cos(relAngle);
+
+    // Hysteresis: switch to posterior when cos < -0.15, switch to anterior when cos > 0.15
+    let detected = currentFacingRef.current;
+    if (cosVal < -0.15) {
+      detected = "posterior";
+    } else if (cosVal > 0.15) {
+      detected = "anterior";
+    }
+
+    if (detected !== currentFacingRef.current) {
+      currentFacingRef.current = detected;
+      if (onFacingChange) {
+        onFacingChange(detected);
+      }
+    }
+  });
+
   return (
     <OrbitControls
       ref={controlsRef}
       enableDamping={true}
       dampingFactor={0.06}
-      enableZoom={allowZoom}
-      minDistance={allowZoom ? 14 : 28.8}
-      maxDistance={allowZoom ? 38 : 28.8}
+      enableRotate={!isLocked}
+      enableZoom={!isLocked}
+      minDistance={14}
+      maxDistance={38}
       target={[0, -0.5, 0]}
       maxPolarAngle={Math.PI - 0.05}
       minPolarAngle={0.05}
@@ -48,7 +81,7 @@ function CameraRig({ resetTrigger, allowZoom = false }) {
  * Delivers an authentic, graceful slow rotation around Y (0 for Anterior, Math.PI for Posterior)
  * Completely eliminates camera groin fly-through
  */
-function AvatarTurntable({ perspective = "anterior", children }) {
+function AvatarTurntable({ perspective = "anterior", turntableAngleRef, children }) {
   const groupRef = useRef();
   const targetAngle = perspective === "posterior" ? Math.PI : 0;
 
@@ -60,6 +93,9 @@ function AvatarTurntable({ perspective = "anterior", children }) {
         groupRef.current.rotation.y += diff * Math.min(1, delta * 4.8);
       } else {
         groupRef.current.rotation.y = targetAngle;
+      }
+      if (turntableAngleRef) {
+        turntableAngleRef.current = groupRef.current.rotation.y;
       }
     }
   });
@@ -90,24 +126,40 @@ export function Scene({
   const isDeepDive = !!focusedItem;
   const bgColor = "#f0f5f4";
 
-  // Filter items strictly based on anatomical perspective (Anterior vs Posterior)
-  // e.g. Cardiac history, cholecystectomy, and foley catheter are Anterior only;
-  // Spinal hardware, lumbar fusion, and renal flank are Posterior only.
+  // Turntable angle ref & dynamic camera facing perspective
+  const turntableAngleRef = useRef(perspective === "posterior" ? Math.PI : 0);
+  const [facingPerspective, setFacingPerspective] = useState(perspective);
+
+  // Sync facing perspective when perspective prop changes externally (e.g. from buttons or deep dives)
+  useEffect(() => {
+    setFacingPerspective(perspective);
+  }, [perspective]);
+
+  const handleFacingChange = (newFacing) => {
+    setFacingPerspective(newFacing);
+    if (onPerspectiveChange && newFacing !== perspective) {
+      onPerspectiveChange(newFacing);
+    }
+  };
+
+  // Filter items dynamically based on the actual side facing the camera (Anterior vs Posterior)
+  // When user manually orbits to the back, facingPerspective flips to "posterior",
+  // immediately rendering L3-L4 Laminectomy, spinal fusion, and other posterior items!
   const visibleConditions = useMemo(
-    () => conditions.filter((c) => isItemRelevantForPerspective(c, perspective)),
-    [conditions, perspective]
+    () => conditions.filter((c) => isItemRelevantForPerspective(c, facingPerspective)),
+    [conditions, facingPerspective]
   );
   const visibleSurgeries = useMemo(
-    () => surgeries.filter((s) => isItemRelevantForPerspective(s, perspective)),
-    [surgeries, perspective]
+    () => surgeries.filter((s) => isItemRelevantForPerspective(s, facingPerspective)),
+    [surgeries, facingPerspective]
   );
   const visibleDrains = useMemo(
-    () => drains.filter((d) => isItemRelevantForPerspective(d, perspective)),
-    [drains, perspective]
+    () => drains.filter((d) => isItemRelevantForPerspective(d, facingPerspective)),
+    [drains, facingPerspective]
   );
   const visibleLines = useMemo(
-    () => lines.filter((l) => isItemRelevantForPerspective(l, perspective)),
-    [lines, perspective]
+    () => lines.filter((l) => isItemRelevantForPerspective(l, facingPerspective)),
+    [lines, facingPerspective]
   );
 
   const totalAnterior = useMemo(() => {
@@ -131,9 +183,8 @@ export function Scene({
   // Hovered item state for Master Hover Tooltip (rendered with highest priority z-index)
   const [hoveredItem, setHoveredItem] = useState(null);
 
-  // Zoom lock and camera reset state
-  // Default allowZoom: false (disables zoom in/out from mouse wheel or trackpad)
-  const [allowZoom, setAllowZoom] = useState(false);
+  // View Lock state: defaults to TRUE (locks both avatar spinning rotation AND zoom)
+  const [isLocked, setIsLocked] = useState(true);
   const [resetCameraTrigger, setResetCameraTrigger] = useState(0);
 
   const handleResetZoom = () => {
@@ -187,7 +238,7 @@ export function Scene({
       onPointerUp={handlePointerUp}
       onDoubleClick={handleDoubleClick}
     >
-      {/* 3D R3F Canvas (Zoomed in 10% from Z=32 to Z=28.8) */}
+      {/* 3D R3F Canvas */}
       <Canvas
         camera={{ position: [0, -0.5, 28.8], fov: 42 }}
         gl={{ antialias: true, alpha: false, powerPreference: "high-performance" }}
@@ -204,13 +255,18 @@ export function Scene({
         <directionalLight position={[-10, 14, -10]} intensity={0.35} color="#e2e8f0" />
         <pointLight position={[0, 4, 8]} intensity={0.35} color="#ffffff" distance={20} />
 
-        {/* Camera Rig & Orbit Controls (Steady Full-Body Overview with Zoom Lock & 1-Click Reset) */}
-        <CameraRig resetTrigger={resetCameraTrigger} allowZoom={allowZoom} />
+        {/* Camera Rig & Orbit Controls: view lock halts avatar spin and zoom */}
+        <CameraRig
+          resetTrigger={resetCameraTrigger}
+          isLocked={isLocked}
+          turntableAngleRef={turntableAngleRef}
+          onFacingChange={handleFacingChange}
+        />
 
         {/* ======================================================== */}
-        {/* 1. ROTATING ANATOMICAL TURNTABLE (Slow Smooth Revolution) */}
+        {/* 1. ROTATING ANATOMICAL TURNTABLE (Smooth Revolution) */}
         {/* ======================================================== */}
-        <AvatarTurntable perspective={perspective}>
+        <AvatarTurntable perspective={perspective} turntableAngleRef={turntableAngleRef}>
           {/* Seamless Anatomical Avatar */}
           <Avatar
             profile={profile}
@@ -512,26 +568,26 @@ export function Scene({
           <RotateCcw className="w-3.5 h-3.5" />
         </button>
 
-        {/* Zoom Lock / Unlock Toggle Button (Defaults to Locked) */}
+        {/* View Lock / Unlock Toggle Button (Defaults to Locked: disables spinning & zoom) */}
         <button
           type="button"
-          onClick={() => setAllowZoom((z) => !z)}
+          onClick={() => setIsLocked((l) => !l)}
           className={`w-8 h-8 flex items-center justify-center transition-colors ${
-            allowZoom
-              ? "text-amber-600 hover:bg-amber-50 bg-amber-50/50"
+            !isLocked
+              ? "text-teal-700 hover:bg-teal-50 bg-teal-50/70"
               : "text-slate-600 hover:text-slate-900 hover:bg-slate-50"
           }`}
           title={
-            allowZoom
-              ? "Zoom is unlocked (scroll to zoom). Click to lock zoom."
-              : "Zoom is locked. Click to unlock zoom."
+            !isLocked
+              ? "View is unlocked (drag to spin avatar, scroll to zoom). Click to lock view."
+              : "View is locked (avatar spin & zoom disabled). Click to unlock to spin avatar."
           }
-          aria-label={allowZoom ? "Lock zoom" : "Unlock zoom"}
+          aria-label={!isLocked ? "Lock view" : "Unlock view"}
         >
-          {allowZoom ? (
-            <Unlock className="w-3.5 h-3.5" />
+          {!isLocked ? (
+            <Unlock className="w-3.5 h-3.5 text-teal-700" />
           ) : (
-            <Lock className="w-3.5 h-3.5" />
+            <Lock className="w-3.5 h-3.5 text-slate-700" />
           )}
         </button>
       </div>

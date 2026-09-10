@@ -12,7 +12,9 @@ import {
   HelpCircle,
   LogOut,
   Sparkles,
-  Award
+  Award,
+  PanelRightClose,
+  PanelRightOpen
 } from "lucide-react";
 
 export function Header({
@@ -25,7 +27,9 @@ export function Header({
   onSignOut,
   user,
   syncStatus,
-  isDemoMode
+  isDemoMode,
+  isSidebarOpen = true,
+  onToggleSidebar
 }) {
   return (
     <header className="h-16 px-5 flex items-center justify-between border-b shrink-0 z-30 shadow-xs select-none bg-white border-slate-200 text-slate-800">
@@ -168,6 +172,28 @@ export function Header({
             <span className="font-semibold text-[11px]">Demo Mode</span>
           </div>
         ) : null}
+
+        {/* Toggle Sidebar Panel Button */}
+        {onToggleSidebar && (
+          <button
+            type="button"
+            onClick={onToggleSidebar}
+            className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border shadow-xs transition-all ${
+              isSidebarOpen
+                ? "bg-white border-slate-300 text-slate-700 hover:bg-slate-100 hover:text-slate-900"
+                : "bg-teal-50 border-teal-300 text-teal-800 hover:bg-teal-100"
+            }`}
+            title={isSidebarOpen ? "Collapse sidebar panel to center 3D avatar" : "Open patient records sidebar panel"}
+            aria-label={isSidebarOpen ? "Collapse sidebar" : "Open sidebar"}
+          >
+            {isSidebarOpen ? (
+              <PanelRightClose className="w-4 h-4 text-slate-600" />
+            ) : (
+              <PanelRightOpen className="w-4 h-4 text-teal-700" />
+            )}
+            <span className="hidden xl:inline">{isSidebarOpen ? "Collapse Panel" : "Open Panel"}</span>
+          </button>
+        )}
 
         {/* Sign Out Button */}
         <button
