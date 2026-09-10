@@ -13,7 +13,8 @@ import {
 } from "lucide-react";
 import {
   supabase,
-  isSupabaseConfigured
+  isSupabaseConfigured,
+  resetSupabaseConfig
 } from "../../lib/supabase";
 import { LoginAvatarPreview } from "./LoginAvatarPreview";
 
@@ -82,10 +83,16 @@ export function LoginView({ onDemoAccess, onLoginSuccess }) {
     }
 
     try {
+      const cleanEmail = email.trim();
+      const cleanPassword = password;
+
       if (isSignUp) {
         const { data, error } = await supabase.auth.signUp({
-          email,
-          password
+          email: cleanEmail,
+          password: cleanPassword,
+          options: {
+            emailRedirectTo: typeof window !== "undefined" ? window.location.origin : undefined
+          }
         });
         if (error) throw error;
         if (data?.session) {
@@ -98,15 +105,21 @@ export function LoginView({ onDemoAccess, onLoginSuccess }) {
         }
       } else {
         const { data, error } = await supabase.auth.signInWithPassword({
-          email,
-          password
+          email: cleanEmail,
+          password: cleanPassword
         });
         if (error) throw error;
         setSuccessMsg("Authentication verified! Launching clinical session...");
         if (onLoginSuccess) onLoginSuccess(data.user);
       }
     } catch (err) {
-      setErrorMsg(err.message || "Authentication failed. Please verify credentials.");
+      if (err.message && err.message.toLowerCase().includes("invalid path")) {
+        setErrorMsg(
+          "Invalid Supabase project URL detected (it should be https://your-project.supabase.co without trailing /rest/v1 or subpaths). Stored URL has been cleaned. Please try again or reset credentials."
+        );
+      } else {
+        setErrorMsg(err.message || "Authentication failed. Please verify credentials.");
+      }
     } finally {
       setLoading(false);
     }
@@ -204,9 +217,28 @@ export function LoginView({ onDemoAccess, onLoginSuccess }) {
             <div className="p-4 sm:p-5 space-y-3.5">
               {/* Alerts */}
               {errorMsg && (
-                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex items-start gap-2 animate-in fade-in">
-                  <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
-                  <span className="leading-snug font-medium">{errorMsg}</span>
+                <div className="p-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-800 text-xs flex flex-col gap-1.5 animate-in fade-in">
+                  <div className="flex items-start gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <span className="leading-snug font-medium">{errorMsg}</span>
+                  </div>
+                  {errorMsg.toLowerCase().includes("supabase") && (
+                    <div className="pt-1.5 border-t border-rose-200/70 flex items-center justify-between text-[11px]">
+                      <span className="text-rose-700">Need to clear saved project link?</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          resetSupabaseConfig();
+                          setErrorMsg(null);
+                          setSuccessMsg("Saved Supabase credentials have been cleared. Page will refresh...");
+                          setTimeout(() => window.location.reload(), 900);
+                        }}
+                        className="font-bold underline text-rose-900 hover:text-rose-950 transition-colors"
+                      >
+                        Reset Credentials
+                      </button>
+                    </div>
+                  )}
                 </div>
               )}
               {successMsg && (

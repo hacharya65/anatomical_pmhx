@@ -1,12 +1,60 @@
 import { createClient } from "@supabase/supabase-js";
 
-// Retrieve config from env or localStorage
+// Helper functions to normalize and clean Supabase URL and keys
+export function normalizeSupabaseUrl(rawUrl) {
+  if (!rawUrl || typeof rawUrl !== "string") return "";
+  let clean = rawUrl.trim().replace(/^["']|["']$/g, "").trim();
+
+  // If user pasted dashboard URL: https://supabase.com/dashboard/project/<project-ref>
+  const dashboardMatch = clean.match(/supabase\.com\/dashboard\/project\/([a-z0-9_-]+)/i);
+  if (dashboardMatch && dashboardMatch[1]) {
+    return `https://${dashboardMatch[1]}.supabase.co`;
+  }
+
+  // Ensure protocol
+  if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
+    clean = `https://${clean}`;
+  }
+
+  try {
+    const parsed = new URL(clean);
+    // Project URL must be protocol + host ONLY (e.g. https://xyz.supabase.co)
+    // Strip all pathnames (like /rest/v1, /auth/v1, /graphql, trailing slashes)
+    return `${parsed.protocol}//${parsed.host}`;
+  } catch (e) {
+    // Fallback regex: remove any trailing slashes, /rest/v1, /auth/v1, etc.
+    return clean
+      .replace(/\/rest\/v1.*$/i, "")
+      .replace(/\/auth\/v1.*$/i, "")
+      .replace(/\/graphql.*$/i, "")
+      .replace(/\/+$/, "");
+  }
+}
+
+export function normalizeSupabaseKey(rawKey) {
+  if (!rawKey || typeof rawKey !== "string") return "";
+  return rawKey.trim().replace(/^["']|["']$/g, "").trim();
+}
+
+// Retrieve config from env or localStorage with strict URL sanitization
 const getSavedConfig = () => {
   try {
     const customUrl = localStorage.getItem("pmhx_supabase_url");
     const customKey = localStorage.getItem("pmhx_supabase_anon_key");
-    const url = customUrl || import.meta.env.VITE_SUPABASE_URL || "https://your-project.supabase.co";
-    const key = customKey || import.meta.env.VITE_SUPABASE_ANON_KEY || "your-anon-key";
+    const rawUrl = customUrl || import.meta.env.VITE_SUPABASE_URL || "https://your-project.supabase.co";
+    const rawKey = customKey || import.meta.env.VITE_SUPABASE_ANON_KEY || "your-anon-key";
+
+    const url = normalizeSupabaseUrl(rawUrl) || "https://your-project.supabase.co";
+    const key = normalizeSupabaseKey(rawKey) || "your-anon-key";
+
+    // Auto-heal localStorage if the saved URL or key had paths or formatting errors
+    if (customUrl && customUrl !== url) {
+      localStorage.setItem("pmhx_supabase_url", url);
+    }
+    if (customKey && customKey !== key) {
+      localStorage.setItem("pmhx_supabase_anon_key", key);
+    }
+
     return { url, key, isCustom: !!customUrl };
   } catch (e) {
     return {
@@ -23,7 +71,8 @@ export const isSupabaseConfigured = () => {
     url &&
     url !== "https://your-project.supabase.co" &&
     key &&
-    key !== "your-anon-key"
+    key !== "your-anon-key" &&
+    key.length > 20
   );
 };
 
@@ -38,9 +87,11 @@ export let supabase = createClient(config.url, config.key, {
 
 export const reinitializeSupabase = (url, anonKey) => {
   if (url && anonKey) {
-    localStorage.setItem("pmhx_supabase_url", url);
-    localStorage.setItem("pmhx_supabase_anon_key", anonKey);
-    supabase = createClient(url, anonKey, {
+    const cleanUrl = normalizeSupabaseUrl(url);
+    const cleanKey = normalizeSupabaseKey(anonKey);
+    localStorage.setItem("pmhx_supabase_url", cleanUrl);
+    localStorage.setItem("pmhx_supabase_anon_key", cleanKey);
+    supabase = createClient(cleanUrl, cleanKey, {
       auth: {
         persistSession: true,
         autoRefreshToken: true,
@@ -52,8 +103,10 @@ export const reinitializeSupabase = (url, anonKey) => {
 };
 
 export const resetSupabaseConfig = () => {
-  localStorage.removeItem("pmhx_supabase_url");
-  localStorage.removeItem("pmhx_supabase_anon_key");
+  try {
+    localStorage.removeItem("pmhx_supabase_url");
+    localStorage.removeItem("pmhx_supabase_anon_key");
+  } catch (_) {}
   const fallback = getSavedConfig();
   supabase = createClient(fallback.url, fallback.key);
 };
