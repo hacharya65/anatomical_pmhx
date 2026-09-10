@@ -40,8 +40,8 @@ export default function App() {
   } = usePatientData();
 
   // Navigation & 3D interaction state
-  // Default to "lines" or "drains" matching Epic's LDA view!
-  const [activeTab, setActiveTab] = useState("lines");
+  // Default to "summary" (opens with the Clinical Summary first!)
+  const [activeTab, setActiveTab] = useState("summary");
   const [perspective, setPerspective] = useState("anterior");
   const [focusedItem, setFocusedItem] = useState(null);
   const [searchQuery, setSearchQuery] = useState("");
@@ -218,11 +218,11 @@ export default function App() {
     if (!q) return;
 
     const tabCounts = {
-      lines: filteredLines.length,
-      drains: filteredDrains.length,
-      surgeries: filteredSurgeries.length,
+      summary: 0,
       conditions: filteredConditions.length,
-      medications: filteredMedications.length
+      surgeries: filteredSurgeries.length,
+      medications: filteredMedications.length,
+      lines_drains: filteredLines.length + filteredDrains.length
     };
 
     // If current active tab already contains matches, keep the user on their current tab
@@ -231,7 +231,7 @@ export default function App() {
     }
 
     // Otherwise, find the tab that contains the matched item(s)
-    const tabOrder = ["lines", "drains", "surgeries", "conditions", "medications"];
+    const tabOrder = ["conditions", "surgeries", "medications", "lines_drains"];
     let bestTab = null;
     let maxCount = 0;
 

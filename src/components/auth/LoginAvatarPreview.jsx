@@ -111,10 +111,10 @@ function ConditionPin({ item, hoveredId, setHoveredId }) {
 
   return (
     <group position={item.position}>
-      {/* 3D Anchor Sphere */}
+      {/* 3D Anchor Sphere - Smaller and refined */}
       {!isOtherHovered && (
         <mesh>
-          <sphereGeometry args={[0.11, 16, 16]} />
+          <sphereGeometry args={[0.075, 16, 16]} />
           <meshStandardMaterial
             color={isHovered ? "#0d9488" : "#64748b"}
             emissive={isHovered ? "#14b8a6" : "#475569"}
@@ -126,7 +126,7 @@ function ConditionPin({ item, hoveredId, setHoveredId }) {
       {/* HTML Overlay with fixed coordinate anchor to prevent ANY icon movement */}
       <Html
         center
-        distanceFactor={27}
+        distanceFactor={28}
         zIndexRange={isHovered ? [9999, 9000] : [100, 0]}
         style={{
           pointerEvents: isOtherHovered ? "none" : "auto",
@@ -134,9 +134,9 @@ function ConditionPin({ item, hoveredId, setHoveredId }) {
           opacity: isOtherHovered ? 0 : 1
         }}
       >
-        {/* Fixed 28x28 container keeps pin precisely stationary */}
-        <div className="w-7 h-7 relative flex items-center justify-center select-none">
-          {/* Circular Pin Button */}
+        {/* Fixed 22x22 container keeps pin precisely stationary and smaller */}
+        <div className="w-5.5 h-5.5 relative flex items-center justify-center select-none">
+          {/* Circular Pin Button - Scaled down for sleek anatomical look */}
           <div
             onPointerEnter={(e) => {
               e.stopPropagation();
@@ -146,18 +146,18 @@ function ConditionPin({ item, hoveredId, setHoveredId }) {
               e.stopPropagation();
               setHoveredId(null);
             }}
-            className={`w-7 h-7 rounded-full flex items-center justify-center cursor-pointer transition-all duration-150 ${
+            className={`w-5.5 h-5.5 rounded-full flex items-center justify-center cursor-pointer transition-all duration-150 ${
               isHovered
-                ? "bg-teal-600 text-white shadow-lg ring-4 ring-teal-400/40"
-                : "bg-white/95 text-slate-700 border border-slate-300 shadow-md hover:border-teal-500 hover:text-teal-700"
+                ? "bg-teal-600 text-white shadow-md ring-2 ring-teal-400/40"
+                : "bg-white/95 text-slate-700 border border-slate-300 shadow-xs hover:border-teal-500 hover:text-teal-700"
             }`}
           >
-            <IconComponent className="w-3.5 h-3.5" />
+            <IconComponent className="w-3 h-3" />
           </div>
 
           {/* Compact Foreground Detail Box - Sleek, does NOT displace pin */}
           {isHovered && (
-            <div className="absolute bottom-9 left-1/2 -translate-x-1/2 w-48 p-2 bg-white/98 backdrop-blur-md rounded-xl border-2 border-teal-600 shadow-xl text-slate-900 text-left pointer-events-none z-50">
+            <div className="absolute bottom-7 left-1/2 -translate-x-1/2 w-48 p-2 bg-white/98 backdrop-blur-md rounded-xl border-2 border-teal-600 shadow-xl text-slate-900 text-left pointer-events-none z-50">
               <div className="flex items-center justify-between gap-1 mb-1 pb-1 border-b border-slate-100">
                 <span className="text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.2 rounded bg-teal-50 text-teal-800 border border-teal-200">
                   {item.system}
