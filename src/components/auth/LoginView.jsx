@@ -342,8 +342,8 @@ export function LoginView({ onDemoAccess, onLoginSuccess }) {
         </div>
       </main>
 
-      {/* High-Contrast Bottom Footer - guaranteed visible without cutoff */}
-      <footer className="w-full max-w-7xl mx-auto py-1.5 shrink-0 border-t border-slate-300/80 text-xs text-slate-800 font-semibold flex items-center justify-between">
+      {/* High-Contrast Bottom Footer - centered text, guaranteed visible without cutoff */}
+      <footer className="w-full max-w-7xl mx-auto py-1.5 shrink-0 border-t border-slate-300/80 text-xs text-slate-800 font-semibold flex items-center justify-center text-center">
         <div>
           The Visual Medical History &copy; {new Date().getFullYear()} • Epic LDA & EMR Spatial Visualizer
         </div>

@@ -3,7 +3,6 @@ import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
 import { Avatar } from "../3d/Avatar";
 import {
-  Brain,
   Heart,
   Wind,
   Syringe,
@@ -14,25 +13,15 @@ import {
   Crosshair
 } from "lucide-react";
 
-// Representative clinical conditions & LDAs mapped anatomically (Anterior & Posterior)
+// Representative clinical conditions & LDAs mapped across the mannequin
+// Note: Migraine removed per user request; icons remain persistently visible across all rotations
 const PREVIEW_ICONS = [
-  // --- ANTERIOR CONDITIONS (Visible on the front) ---
-  {
-    id: "neuro",
-    label: "Migraine with Aura",
-    system: "Neurology",
-    status: "Controlled • Sumatriptan",
-    position: [0, 6.6, 0.95],
-    normal: [0, 0, 1],
-    icon: Brain
-  },
   {
     id: "cvc",
     label: "Right IJ Triple-Lumen CVC",
     system: "Lines & Access",
     status: "Inserted 08/29 • Dressing Intact",
     position: [-0.75, 4.9, 1.05],
-    normal: [-0.2, 0, 0.98],
     icon: Syringe
   },
   {
@@ -41,7 +30,6 @@ const PREVIEW_ICONS = [
     system: "Cardiology",
     status: "DES to LAD • Aspirin 81mg",
     position: [-0.65, 3.65, 1.25],
-    normal: [-0.2, 0, 0.98],
     icon: Heart
   },
   {
@@ -50,7 +38,6 @@ const PREVIEW_ICONS = [
     system: "Pulmonology",
     status: "Albuterol HFA PRN • Stable",
     position: [0.85, 3.85, 1.15],
-    normal: [0.2, 0, 0.98],
     icon: Wind
   },
   {
@@ -59,7 +46,6 @@ const PREVIEW_ICONS = [
     system: "Surgical History",
     status: "Post-Op Day 12 • Incisions Healing",
     position: [-0.85, 1.95, 1.15],
-    normal: [-0.3, 0, 0.95],
     icon: Shield
   },
   {
@@ -68,7 +54,6 @@ const PREVIEW_ICONS = [
     system: "Lines & Access",
     status: "Serosanguinous 35 mL/24h",
     position: [-1.4, 0.75, 1.05],
-    normal: [-0.5, 0, 0.86],
     icon: Droplets
   },
   {
@@ -77,7 +62,6 @@ const PREVIEW_ICONS = [
     system: "Endocrinology",
     status: "HbA1c 6.8% • Metformin 1000mg",
     position: [0.1, 1.25, 1.15],
-    normal: [0, 0, 1],
     icon: Activity
   },
   {
@@ -86,7 +70,6 @@ const PREVIEW_ICONS = [
     system: "Orthopedics",
     status: "Ceramic-on-Poly • Full Weight",
     position: [1.15, -1.25, 0.9],
-    normal: [0.4, 0, 0.91],
     icon: Disc
   },
   {
@@ -95,28 +78,15 @@ const PREVIEW_ICONS = [
     system: "Rheumatology",
     status: "Grade 3 KL • Meloxicam PRN",
     position: [-1.15, -4.1, 1.0],
-    normal: [-0.2, 0, 0.98],
     icon: Crosshair
   },
-
-  // --- POSTERIOR CONDITIONS (Visible on the back) ---
   {
     id: "lumbar",
     label: "L4-S1 Posterior Lumbar Fusion",
     system: "Spine Surgery",
     status: "Pedicle Screws & Rods Intact",
     position: [0, 0.35, -0.95],
-    normal: [0, 0, -1],
     icon: Shield
-  },
-  {
-    id: "cervical",
-    label: "Cervical Radiculopathy (C6-C7)",
-    system: "Spine & Neuro",
-    status: "Conservative PT • Stable",
-    position: [0, 5.75, -0.85],
-    normal: [0, 0, -1],
-    icon: Brain
   },
   {
     id: "renal",
@@ -124,42 +94,23 @@ const PREVIEW_ICONS = [
     system: "Nephrology",
     status: "Bosniak I (2.4 cm) • Benign",
     position: [0.95, 1.65, -0.95],
-    normal: [0.35, 0, -0.93],
     icon: Activity
   }
 ];
 
 /**
- * Individual Anatomical Condition Pin
- * Evaluates visibility dynamically based on anterior/posterior surface normal relative to the viewer.
- * Anchors the icon firmly so hovering does NOT displace the pin center by even a single pixel.
+ * Individual Clinical Condition Pin
+ * - Persistently visible across all full 360-degree rotations (never disappears)
+ * - Fixed 28x28px container keeps pin precisely stationary when hovered
+ * - Smaller, sleek floating detail card in the foreground
  */
-function ConditionPin({ item, hoveredId, setHoveredId, relativeAngleRef }) {
-  const pinGroupRef = useRef();
-  const [isFacing, setIsFacing] = useState(true);
-
-  useFrame(() => {
-    if (!pinGroupRef.current) return;
-    const alpha = relativeAngleRef.current;
-    const [nx, , nz] = item.normal;
-    // Dot product determines if the anatomical side is facing toward the camera
-    const dot = nx * Math.sin(alpha) + nz * Math.cos(alpha);
-    const facing = dot > 0.18;
-
-    if (pinGroupRef.current.visible !== facing) {
-      pinGroupRef.current.visible = facing;
-      setIsFacing(facing);
-    }
-  });
-
+function ConditionPin({ item, hoveredId, setHoveredId }) {
   const IconComponent = item.icon;
   const isHovered = hoveredId === item.id;
   const isOtherHovered = hoveredId !== null && !isHovered;
 
-  if (!isFacing) return null;
-
   return (
-    <group ref={pinGroupRef} position={item.position}>
+    <group position={item.position}>
       {/* 3D Anchor Sphere */}
       {!isOtherHovered && (
         <mesh>
@@ -204,7 +155,7 @@ function ConditionPin({ item, hoveredId, setHoveredId, relativeAngleRef }) {
             <IconComponent className="w-3.5 h-3.5" />
           </div>
 
-          {/* Compact Foreground Detail Box - Smaller, does NOT displace pin */}
+          {/* Compact Foreground Detail Box - Sleek, does NOT displace pin */}
           {isHovered && (
             <div className="absolute bottom-9 left-1/2 -translate-x-1/2 w-48 p-2 bg-white/98 backdrop-blur-md rounded-xl border-2 border-teal-600 shadow-xl text-slate-900 text-left pointer-events-none z-50">
               <div className="flex items-center justify-between gap-1 mb-1 pb-1 border-b border-slate-100">
@@ -237,25 +188,17 @@ function ConditionPin({ item, hoveredId, setHoveredId, relativeAngleRef }) {
 
 /**
  * Continuous Clockwise Rotating Turntable
- * - Slowed rotation speed by 50% (speed = 0.21)
+ * - Icons remain persistently visible across all 360-degree rotations
  * - Completely halts rotation when an item is hovered
- * - Maintains anterior / posterior visibility dynamically
+ * - Slow continuous rotation speed (0.21)
  */
 function RotatingMannequin({ hoveredId, setHoveredId }) {
   const groupRef = useRef();
-  const relativeAngleRef = useRef(0);
 
-  useFrame(({ camera }, delta) => {
-    if (groupRef.current) {
-      // Completely STOP rotating when hovering over an item
-      if (!hoveredId) {
-        // Slow rotation speed by 50% (0.42 * 0.5 = 0.21)
-        groupRef.current.rotation.y -= delta * 0.21;
-      }
-
-      // Compute relative angle between avatar and camera
-      const cameraAzimuth = Math.atan2(camera.position.x, camera.position.z);
-      relativeAngleRef.current = groupRef.current.rotation.y - cameraAzimuth;
+  useFrame((_, delta) => {
+    if (groupRef.current && !hoveredId) {
+      // Rotation halts completely when an item is hovered
+      groupRef.current.rotation.y -= delta * 0.21;
     }
   });
 
@@ -281,14 +224,13 @@ function RotatingMannequin({ hoveredId, setHoveredId }) {
         <meshBasicMaterial color="#94a3b8" transparent opacity={0.15} />
       </mesh>
 
-      {/* Anatomically Positioned Pins */}
+      {/* Anatomically Positioned Pins - Persistently visible throughout full rotation */}
       {PREVIEW_ICONS.map((item) => (
         <ConditionPin
           key={item.id}
           item={item}
           hoveredId={hoveredId}
           setHoveredId={setHoveredId}
-          relativeAngleRef={relativeAngleRef}
         />
       ))}
     </group>
@@ -300,7 +242,7 @@ export function LoginAvatarPreview() {
 
   return (
     <div className="w-full h-full min-h-[380px] sm:min-h-[460px] lg:min-h-[520px] flex flex-col items-center justify-center relative rounded-2xl overflow-hidden bg-gradient-to-b from-slate-100/70 via-teal-50/40 to-slate-200/50 border border-slate-200/80 shadow-inner">
-      {/* 3D WebGL Canvas: Zoomed out by 15% (position 23.5 -> 27.0) */}
+      {/* 3D WebGL Canvas: Zoomed out by 15% (position 27.0) */}
       <Canvas
         camera={{ position: [0, -0.2, 27.0], fov: 42 }}
         className="w-full h-full cursor-grab active:cursor-grabbing"
@@ -322,7 +264,7 @@ export function LoginAvatarPreview() {
           target={[0, -0.2, 0]}
         />
 
-        {/* Continuous Clockwise Rotating Avatar with Pins */}
+        {/* Continuous Clockwise Rotating Avatar with Persistent Pins */}
         <RotatingMannequin
           hoveredId={hoveredId}
           setHoveredId={setHoveredId}
