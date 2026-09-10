@@ -314,14 +314,6 @@ export function LoginView({ onDemoAccess, onLoginSuccess }) {
                 </button>
               </form>
 
-              {/* Divider */}
-              <div className="relative my-2.5 flex items-center justify-center">
-                <div className="border-t border-slate-200 w-full" />
-                <span className="bg-white px-2.5 text-[11px] font-bold text-slate-500 uppercase tracking-wider absolute">
-                  Or Quick Access
-                </span>
-              </div>
-
               {/* Demo Access Button / Card */}
               <div className="p-3 rounded-xl bg-gradient-to-r from-teal-50/80 via-emerald-50/60 to-teal-50/80 border border-teal-200/90 shadow-xs">
                 <div className="flex items-start justify-between gap-2 mb-1.5">
@@ -351,16 +343,9 @@ export function LoginView({ onDemoAccess, onLoginSuccess }) {
       </main>
 
       {/* High-Contrast Bottom Footer - guaranteed visible without cutoff */}
-      <footer className="w-full max-w-7xl mx-auto py-1.5 shrink-0 border-t border-slate-300/80 text-xs text-slate-800 font-semibold flex flex-col sm:flex-row items-center justify-between gap-1">
+      <footer className="w-full max-w-7xl mx-auto py-1.5 shrink-0 border-t border-slate-300/80 text-xs text-slate-800 font-semibold flex items-center justify-between">
         <div>
           The Visual Medical History &copy; {new Date().getFullYear()} • Epic LDA & EMR Spatial Visualizer
-        </div>
-        <div className="flex items-center gap-3 text-xs font-bold text-slate-700">
-          <span>PostgreSQL + Supabase Cloud</span>
-          <span>•</span>
-          <span>Three.js / React 3D</span>
-          <span>•</span>
-          <span>Vercel Optimized</span>
         </div>
       </footer>
     </div>

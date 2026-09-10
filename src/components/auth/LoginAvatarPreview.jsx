@@ -1,7 +1,6 @@
 import React, { useRef, useState } from "react";
 import { Canvas, useFrame } from "@react-three/fiber";
 import { OrbitControls, Html } from "@react-three/drei";
-import * as THREE from "three";
 import { Avatar } from "../3d/Avatar";
 import {
   Brain,
@@ -12,48 +11,47 @@ import {
   Activity,
   Droplets,
   Disc,
-  Crosshair,
-  RotateCw,
-  MoveHorizontal
+  Crosshair
 } from "lucide-react";
 
-// Representative clinical conditions & LDAs mapped across the humanoid body
+// Representative clinical conditions & LDAs mapped anatomically (Anterior & Posterior)
 const PREVIEW_ICONS = [
+  // --- ANTERIOR CONDITIONS (Visible on the front) ---
   {
     id: "neuro",
     label: "Migraine with Aura",
     system: "Neurology",
-    status: "Controlled • Episodic Sumatriptan",
+    status: "Controlled • Sumatriptan",
     position: [0, 6.6, 0.95],
-    icon: Brain,
-    color: "indigo"
+    normal: [0, 0, 1],
+    icon: Brain
   },
   {
     id: "cvc",
     label: "Right IJ Triple-Lumen CVC",
     system: "Lines & Access",
-    status: "Inserted 08/29 • Chlorhexidine Dressing",
+    status: "Inserted 08/29 • Dressing Intact",
     position: [-0.75, 4.9, 1.05],
-    icon: Syringe,
-    color: "amber"
+    normal: [-0.2, 0, 0.98],
+    icon: Syringe
   },
   {
     id: "cardiac",
     label: "Coronary Artery Disease",
     system: "Cardiology",
-    status: "DES to LAD (2021) • Aspirin 81mg",
+    status: "DES to LAD • Aspirin 81mg",
     position: [-0.65, 3.65, 1.25],
-    icon: Heart,
-    color: "rose"
+    normal: [-0.2, 0, 0.98],
+    icon: Heart
   },
   {
     id: "pulm",
     label: "Mild Persistent Asthma",
     system: "Pulmonology",
-    status: "Albuterol HFA PRN • FEV1 86%",
+    status: "Albuterol HFA PRN • Stable",
     position: [0.85, 3.85, 1.15],
-    icon: Wind,
-    color: "cyan"
+    normal: [0.2, 0, 0.98],
+    icon: Wind
   },
   {
     id: "chole",
@@ -61,8 +59,8 @@ const PREVIEW_ICONS = [
     system: "Surgical History",
     status: "Post-Op Day 12 • Incisions Healing",
     position: [-0.85, 1.95, 1.15],
-    icon: Shield,
-    color: "emerald"
+    normal: [-0.3, 0, 0.95],
+    icon: Shield
   },
   {
     id: "drain",
@@ -70,8 +68,8 @@ const PREVIEW_ICONS = [
     system: "Lines & Access",
     status: "Serosanguinous 35 mL/24h",
     position: [-1.4, 0.75, 1.05],
-    icon: Droplets,
-    color: "purple"
+    normal: [-0.5, 0, 0.86],
+    icon: Droplets
   },
   {
     id: "diabetes",
@@ -79,17 +77,17 @@ const PREVIEW_ICONS = [
     system: "Endocrinology",
     status: "HbA1c 6.8% • Metformin 1000mg",
     position: [0.1, 1.25, 1.15],
-    icon: Activity,
-    color: "teal"
+    normal: [0, 0, 1],
+    icon: Activity
   },
   {
     id: "hip",
     label: "Left Total Hip Arthroplasty",
     system: "Orthopedics",
-    status: "Ceramic-on-Poly • Full Weight Bearing",
+    status: "Ceramic-on-Poly • Full Weight",
     position: [1.15, -1.25, 0.9],
-    icon: Disc,
-    color: "blue"
+    normal: [0.4, 0, 0.91],
+    icon: Disc
   },
   {
     id: "knee",
@@ -97,25 +95,167 @@ const PREVIEW_ICONS = [
     system: "Rheumatology",
     status: "Grade 3 KL • Meloxicam PRN",
     position: [-1.15, -4.1, 1.0],
-    icon: Crosshair,
-    color: "amber"
+    normal: [-0.2, 0, 0.98],
+    icon: Crosshair
+  },
+
+  // --- POSTERIOR CONDITIONS (Visible on the back) ---
+  {
+    id: "lumbar",
+    label: "L4-S1 Posterior Lumbar Fusion",
+    system: "Spine Surgery",
+    status: "Pedicle Screws & Rods Intact",
+    position: [0, 0.35, -0.95],
+    normal: [0, 0, -1],
+    icon: Shield
+  },
+  {
+    id: "cervical",
+    label: "Cervical Radiculopathy (C6-C7)",
+    system: "Spine & Neuro",
+    status: "Conservative PT • Stable",
+    position: [0, 5.75, -0.85],
+    normal: [0, 0, -1],
+    icon: Brain
+  },
+  {
+    id: "renal",
+    label: "Left Renal Simple Cyst",
+    system: "Nephrology",
+    status: "Bosniak I (2.4 cm) • Benign",
+    position: [0.95, 1.65, -0.95],
+    normal: [0.35, 0, -0.93],
+    icon: Activity
   }
 ];
 
 /**
- * Continuous Clockwise Rotating Turntable with interactive pins
- * When an icon is hovered, other icons vanish and the active label is placed in the foreground.
+ * Individual Anatomical Condition Pin
+ * Evaluates visibility dynamically based on anterior/posterior surface normal relative to the viewer.
+ * Anchors the icon firmly so hovering does NOT displace the pin center by even a single pixel.
+ */
+function ConditionPin({ item, hoveredId, setHoveredId, relativeAngleRef }) {
+  const pinGroupRef = useRef();
+  const [isFacing, setIsFacing] = useState(true);
+
+  useFrame(() => {
+    if (!pinGroupRef.current) return;
+    const alpha = relativeAngleRef.current;
+    const [nx, , nz] = item.normal;
+    // Dot product determines if the anatomical side is facing toward the camera
+    const dot = nx * Math.sin(alpha) + nz * Math.cos(alpha);
+    const facing = dot > 0.18;
+
+    if (pinGroupRef.current.visible !== facing) {
+      pinGroupRef.current.visible = facing;
+      setIsFacing(facing);
+    }
+  });
+
+  const IconComponent = item.icon;
+  const isHovered = hoveredId === item.id;
+  const isOtherHovered = hoveredId !== null && !isHovered;
+
+  if (!isFacing) return null;
+
+  return (
+    <group ref={pinGroupRef} position={item.position}>
+      {/* 3D Anchor Sphere */}
+      {!isOtherHovered && (
+        <mesh>
+          <sphereGeometry args={[0.11, 16, 16]} />
+          <meshStandardMaterial
+            color={isHovered ? "#0d9488" : "#64748b"}
+            emissive={isHovered ? "#14b8a6" : "#475569"}
+            emissiveIntensity={isHovered ? 0.9 : 0.25}
+          />
+        </mesh>
+      )}
+
+      {/* HTML Overlay with fixed coordinate anchor to prevent ANY icon movement */}
+      <Html
+        center
+        distanceFactor={27}
+        zIndexRange={isHovered ? [9999, 9000] : [100, 0]}
+        style={{
+          pointerEvents: isOtherHovered ? "none" : "auto",
+          transition: "opacity 0.2s ease-in-out",
+          opacity: isOtherHovered ? 0 : 1
+        }}
+      >
+        {/* Fixed 28x28 container keeps pin precisely stationary */}
+        <div className="w-7 h-7 relative flex items-center justify-center select-none">
+          {/* Circular Pin Button */}
+          <div
+            onPointerEnter={(e) => {
+              e.stopPropagation();
+              setHoveredId(item.id);
+            }}
+            onPointerLeave={(e) => {
+              e.stopPropagation();
+              setHoveredId(null);
+            }}
+            className={`w-7 h-7 rounded-full flex items-center justify-center cursor-pointer transition-all duration-150 ${
+              isHovered
+                ? "bg-teal-600 text-white shadow-lg ring-4 ring-teal-400/40"
+                : "bg-white/95 text-slate-700 border border-slate-300 shadow-md hover:border-teal-500 hover:text-teal-700"
+            }`}
+          >
+            <IconComponent className="w-3.5 h-3.5" />
+          </div>
+
+          {/* Compact Foreground Detail Box - Smaller, does NOT displace pin */}
+          {isHovered && (
+            <div className="absolute bottom-9 left-1/2 -translate-x-1/2 w-48 p-2 bg-white/98 backdrop-blur-md rounded-xl border-2 border-teal-600 shadow-xl text-slate-900 text-left pointer-events-none z-50">
+              <div className="flex items-center justify-between gap-1 mb-1 pb-1 border-b border-slate-100">
+                <span className="text-[9px] font-extrabold uppercase tracking-wider px-1.5 py-0.2 rounded bg-teal-50 text-teal-800 border border-teal-200">
+                  {item.system}
+                </span>
+                <div className="flex items-center gap-1 text-[9px] font-bold text-emerald-700">
+                  <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                  <span>Active</span>
+                </div>
+              </div>
+
+              <div className="font-bold text-[11px] text-slate-900 leading-tight">
+                {item.label}
+              </div>
+
+              <div className="text-[10px] text-slate-600 font-medium mt-0.5 leading-snug">
+                {item.status}
+              </div>
+
+              {/* Caret Pointer */}
+              <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-[5px] border-x-transparent border-t-[5px] border-t-teal-600" />
+            </div>
+          )}
+        </div>
+      </Html>
+    </group>
+  );
+}
+
+/**
+ * Continuous Clockwise Rotating Turntable
+ * - Slowed rotation speed by 50% (speed = 0.21)
+ * - Completely halts rotation when an item is hovered
+ * - Maintains anterior / posterior visibility dynamically
  */
 function RotatingMannequin({ hoveredId, setHoveredId }) {
   const groupRef = useRef();
+  const relativeAngleRef = useRef(0);
 
-  useFrame((_, delta) => {
+  useFrame(({ camera }, delta) => {
     if (groupRef.current) {
-      // Clockwise slow continuous rotation
-      // Clockwise rotation corresponds to negative Y rotation
-      // Pause or slow rotation slightly during hover so user can easily read details
-      const speed = hoveredId ? 0.08 : 0.42;
-      groupRef.current.rotation.y -= delta * speed;
+      // Completely STOP rotating when hovering over an item
+      if (!hoveredId) {
+        // Slow rotation speed by 50% (0.42 * 0.5 = 0.21)
+        groupRef.current.rotation.y -= delta * 0.21;
+      }
+
+      // Compute relative angle between avatar and camera
+      const cameraAzimuth = Math.atan2(camera.position.x, camera.position.z);
+      relativeAngleRef.current = groupRef.current.rotation.y - cameraAzimuth;
     }
   });
 
@@ -141,95 +281,16 @@ function RotatingMannequin({ hoveredId, setHoveredId }) {
         <meshBasicMaterial color="#94a3b8" transparent opacity={0.15} />
       </mesh>
 
-      {/* Interactive Clinical Pins */}
-      {PREVIEW_ICONS.map((item) => {
-        const IconComponent = item.icon;
-        const isHovered = hoveredId === item.id;
-        const isOtherHovered = hoveredId !== null && !isHovered;
-
-        return (
-          <group key={item.id} position={item.position}>
-            {/* 3D Pulse Anchor Mesh */}
-            {!isOtherHovered && (
-              <mesh>
-                <sphereGeometry args={[0.12, 16, 16]} />
-                <meshStandardMaterial
-                  color={isHovered ? "#0d9488" : "#64748b"}
-                  emissive={isHovered ? "#14b8a6" : "#475569"}
-                  emissiveIntensity={isHovered ? 0.8 : 0.2}
-                />
-              </mesh>
-            )}
-
-            {/* Interactive HTML Billboard Overlay */}
-            <Html
-              center
-              distanceFactor={24}
-              zIndexRange={isHovered ? [9999, 9000] : [100, 0]}
-              style={{
-                pointerEvents: isOtherHovered ? "none" : "auto",
-                transition: "opacity 0.2s ease-in-out",
-                opacity: isOtherHovered ? 0 : 1
-              }}
-            >
-              <div
-                onPointerEnter={(e) => {
-                  e.stopPropagation();
-                  setHoveredId(item.id);
-                }}
-                onPointerLeave={(e) => {
-                  e.stopPropagation();
-                  setHoveredId(null);
-                }}
-                className="relative cursor-pointer select-none"
-              >
-                {/* Active Hover State: Crisp Foreground Clinical Badge */}
-                {isHovered ? (
-                  <div className="relative z-50 flex flex-col items-center">
-                    {/* Floating Detail Card in Foreground */}
-                    <div className="mb-2 w-60 p-3 bg-white/98 backdrop-blur-md rounded-xl border-2 border-teal-600 shadow-2xl text-slate-900 text-left pointer-events-none transform -translate-y-1 transition-all">
-                      <div className="flex items-center justify-between gap-1.5 mb-1 pb-1 border-b border-slate-100">
-                        <span className="text-[10px] font-extrabold uppercase tracking-wider px-1.5 py-0.5 rounded bg-teal-50 text-teal-800 border border-teal-200">
-                          {item.system}
-                        </span>
-                        <div className="flex items-center gap-1 text-[10px] font-bold text-emerald-700">
-                          <span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                          <span>Active</span>
-                        </div>
-                      </div>
-
-                      <div className="font-bold text-xs text-slate-900 leading-tight">
-                        {item.label}
-                      </div>
-
-                      <div className="text-[11px] text-slate-600 font-semibold mt-1 leading-snug">
-                        {item.status}
-                      </div>
-
-                      {/* Tooltip Downward Caret Arrow */}
-                      <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-x-[6px] border-x-transparent border-t-[6px] border-t-teal-600" />
-                    </div>
-
-                    {/* Active Pulsing Pin Center */}
-                    <div className="w-8 h-8 rounded-full bg-teal-600 text-white flex items-center justify-center shadow-lg shadow-teal-600/40 ring-4 ring-teal-400/30 scale-110 transition-transform">
-                      <IconComponent className="w-4 h-4 text-white" />
-                    </div>
-                  </div>
-                ) : (
-                  /* Idle Pin State */
-                  <div
-                    className={`w-7 h-7 rounded-full bg-white/95 backdrop-blur-sm border border-slate-300 shadow-md flex items-center justify-center text-slate-700 hover:text-teal-700 hover:border-teal-500 hover:ring-4 hover:ring-teal-500/20 transition-all transform hover:scale-110 ${
-                      isOtherHovered ? "opacity-0 pointer-events-none" : "opacity-90"
-                    }`}
-                  >
-                    <IconComponent className="w-3.5 h-3.5" />
-                  </div>
-                )}
-              </div>
-            </Html>
-          </group>
-        );
-      })}
+      {/* Anatomically Positioned Pins */}
+      {PREVIEW_ICONS.map((item) => (
+        <ConditionPin
+          key={item.id}
+          item={item}
+          hoveredId={hoveredId}
+          setHoveredId={setHoveredId}
+          relativeAngleRef={relativeAngleRef}
+        />
+      ))}
     </group>
   );
 }
@@ -239,21 +300,9 @@ export function LoginAvatarPreview() {
 
   return (
     <div className="w-full h-full min-h-[380px] sm:min-h-[460px] lg:min-h-[520px] flex flex-col items-center justify-center relative rounded-2xl overflow-hidden bg-gradient-to-b from-slate-100/70 via-teal-50/40 to-slate-200/50 border border-slate-200/80 shadow-inner">
-      {/* Top Floating Helper Pill */}
-      <div className="absolute top-3 left-4 right-4 z-10 flex items-center justify-between pointer-events-none">
-        <div className="flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/90 backdrop-blur-md border border-slate-200 text-[11px] font-bold text-slate-700 shadow-xs">
-          <RotateCw className="w-3.5 h-3.5 text-teal-600 animate-spin [animation-duration:9s]" />
-          <span>Interactive Spatial Mannequin</span>
-        </div>
-        <div className="hidden sm:flex items-center gap-1.5 px-3 py-1 rounded-full bg-white/90 backdrop-blur-md border border-slate-200 text-[11px] font-semibold text-slate-600 shadow-xs">
-          <MoveHorizontal className="w-3.5 h-3.5 text-slate-500" />
-          <span>Drag left/right to spin</span>
-        </div>
-      </div>
-
-      {/* 3D WebGL Canvas */}
+      {/* 3D WebGL Canvas: Zoomed out by 15% (position 23.5 -> 27.0) */}
       <Canvas
-        camera={{ position: [0, -0.2, 23.5], fov: 42 }}
+        camera={{ position: [0, -0.2, 27.0], fov: 42 }}
         className="w-full h-full cursor-grab active:cursor-grabbing"
       >
         {/* Medical Studio Lighting */}
@@ -279,13 +328,6 @@ export function LoginAvatarPreview() {
           setHoveredId={setHoveredId}
         />
       </Canvas>
-
-      {/* Bottom Subtle Interaction Legend */}
-      <div className="absolute bottom-2.5 inset-x-4 flex items-center justify-center pointer-events-none z-10">
-        <span className="text-[11px] font-bold text-slate-700 bg-white/90 backdrop-blur-md px-3 py-1 rounded-full border border-slate-200 shadow-xs text-center">
-          Hover pins to inspect conditions • Drag left/right to spin 3D avatar
-        </span>
-      </div>
     </div>
   );
 }
