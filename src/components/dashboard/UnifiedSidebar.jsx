@@ -5,7 +5,6 @@ import { SurgeryList } from "./SurgeryList";
 import { ConditionList } from "./ConditionList";
 import { MedicationList } from "./MedicationList";
 import { ClinicalSummary } from "./ClinicalSummary";
-import { PanelRightClose } from "lucide-react";
 
 export function UnifiedSidebar({
   activeTab,
@@ -145,19 +144,6 @@ export function UnifiedSidebar({
           );
         })}
         </div>
-
-        {/* Sidebar Collapse Button */}
-        {onToggleSidebar && (
-          <button
-            type="button"
-            onClick={onToggleSidebar}
-            className="p-1.5 rounded-lg text-slate-500 hover:text-slate-900 hover:bg-slate-200/80 transition-colors shrink-0 ml-0.5 mb-1"
-            title="Collapse sidebar to center 3D avatar"
-            aria-label="Collapse sidebar"
-          >
-            <PanelRightClose className="w-4 h-4" />
-          </button>
-        )}
       </div>
 
       {/* 2. Feed Content */}

@@ -11,7 +11,7 @@ import { usePatientData } from "./hooks/usePatientData";
 import { isItemRelevantForPerspective } from "./lib/clinicalCatalog";
 import { LoginView } from "./components/auth/LoginView";
 import { supabase } from "./lib/supabase";
-import { PanelRightOpen } from "lucide-react";
+import { ChevronLeft, ChevronRight } from "lucide-react";
 
 export default function App() {
   const {
@@ -374,28 +374,12 @@ export default function App() {
         user={user}
         syncStatus={syncStatus}
         isDemoMode={isDemoMode}
-        isSidebarOpen={isSidebarOpen}
-        onToggleSidebar={() => setIsSidebarOpen((open) => !open)}
       />
 
       {/* 2. Main Clinical Workstation: 3D Scene (Left) + Unified Sidebar (Right) */}
       <div className="flex-1 flex overflow-hidden relative">
         {/* 3D Scene Viewport (Main Canvas - Centers automatically when sidebar is closed) */}
         <main className="flex-1 h-full relative overflow-hidden bg-slate-100/50">
-          {/* Floating button to reopen sidebar when collapsed */}
-          {!isSidebarOpen && (
-            <button
-              type="button"
-              onClick={() => setIsSidebarOpen(true)}
-              className="absolute top-4 right-4 z-30 flex items-center gap-2 px-3 py-2 rounded-xl bg-white/95 backdrop-blur-md border border-slate-300 shadow-lg text-slate-800 hover:text-teal-700 hover:border-teal-500 font-bold text-xs transition-all animate-in fade-in group"
-              title="Open patient records & clinical sidebar"
-              aria-label="Open sidebar"
-            >
-              <PanelRightOpen className="w-4 h-4 text-teal-600 group-hover:translate-x-0.5 transition-transform" />
-              <span>Open Patient Panel</span>
-            </button>
-          )}
-
           <Scene
             profile={patientData.profile}
             conditions={filteredConditions}
@@ -416,6 +400,25 @@ export default function App() {
             onAddNewLDA={() => handleOpenAdd("line")}
           />
         </main>
+
+        {/* Vertical Collapse / Expand Panel Button docked on the border between Avatar space and Navigation area */}
+        <button
+          type="button"
+          onClick={() => setIsSidebarOpen((prev) => !prev)}
+          className={`absolute top-1/2 -translate-y-1/2 z-30 flex flex-col items-center justify-center w-5 h-24 bg-white border border-r-0 border-slate-300 shadow-md text-slate-500 hover:text-teal-700 hover:bg-teal-50 transition-all rounded-l-md cursor-pointer group select-none ${
+            isSidebarOpen ? "right-[580px] xl:right-[620px]" : "right-0"
+          }`}
+          title={isSidebarOpen ? "Collapse navigation panel to expand 3D workspace" : "Expand navigation panel"}
+          aria-label={isSidebarOpen ? "Collapse navigation panel" : "Expand navigation panel"}
+        >
+          <div className="w-1 h-3.5 bg-slate-300 group-hover:bg-teal-500 rounded-full mb-1.5 transition-colors" />
+          {isSidebarOpen ? (
+            <ChevronRight className="w-3.5 h-3.5 text-slate-600 group-hover:text-teal-700 transition-transform group-hover:translate-x-0.5" />
+          ) : (
+            <ChevronLeft className="w-3.5 h-3.5 text-slate-600 group-hover:text-teal-700 transition-transform group-hover:-translate-x-0.5" />
+          )}
+          <div className="w-1 h-3.5 bg-slate-300 group-hover:bg-teal-500 rounded-full mt-1.5 transition-colors" />
+        </button>
 
         {/* Unified Right Sidebar: Conditionally rendered with close function */}
         {isSidebarOpen && (
