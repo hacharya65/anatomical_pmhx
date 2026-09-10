@@ -1,6 +1,6 @@
 import React from "react";
 import {
-  HeartPulse,
+  Activity,
   Search,
   Edit3,
   Cloud,
@@ -33,19 +33,22 @@ export function Header({
 }) {
   return (
     <header className="h-16 px-5 flex items-center justify-between border-b shrink-0 z-30 shadow-xs select-none bg-white border-slate-200 text-slate-800">
-      {/* 1. Branding: Logo, Title & Subtitle */}
-      <div className="flex items-center gap-3 shrink-0">
-        <div className="w-10 h-10 rounded-xl flex items-center justify-center shadow-xs border bg-teal-700 border-teal-800 text-white">
-          <HeartPulse className="w-6 h-6" />
+      {/* 1. Branding: Logo, Title & Subtitle (Identical to Login Screen) */}
+      <div className="flex items-center gap-2.5 shrink-0">
+        <div className="w-9 h-9 rounded-xl bg-teal-700 text-white flex items-center justify-center shadow-md shadow-teal-700/20 shrink-0">
+          <Activity className="w-5 h-5" />
         </div>
         <div>
-          <div className="flex items-center gap-2">
-            <h1 className="text-base font-extrabold tracking-tight leading-none text-slate-900">
+          <div className="flex items-center gap-1.5">
+            <h1 className="text-sm font-bold tracking-tight text-slate-900 flex items-center gap-1.5">
               The Visual Medical History
+              <span className="text-[10px] font-mono font-bold px-1.5 py-0.2 rounded bg-teal-100 text-teal-900 border border-teal-300">
+                v2.4
+              </span>
             </h1>
           </div>
-          <p className="text-[11px] font-bold tracking-wide uppercase mt-0.5 text-teal-700">
-            A New Type of EMR
+          <p className="text-[11px] font-semibold text-slate-600">
+            Department of Internal Medicine • Spatial Clinical EMR
           </p>
         </div>
       </div>
