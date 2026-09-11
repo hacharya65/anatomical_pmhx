@@ -1337,128 +1337,153 @@ export function PatientOnboardingModal({
     }));
   };
 
-  const handleFinishPdfImport = () => {
-    const d = extractedReview.demographics;
-    const finalName = `${d.firstName || firstName} ${d.lastName || lastName}`.trim() || initialProfile.name || "Patient";
-    const finalDob = d.dob || dob;
-    const dynamicAge = calculateAge(finalDob);
-    const formattedContact = emergencyContactName.trim()
-      ? `${emergencyContactName.trim()} (${emergencyContactRelation}) • ${emergencyContactPhone.trim()}`
-      : "N/A";
+  const handleFinishPdfImport = async () => {
+    try {
+      const d = extractedReview?.demographics || {};
+      const finalFirst = (d.firstName || firstName || "").trim();
+      const finalLast = (d.lastName || lastName || "").trim();
+      const finalName = `${finalFirst} ${finalLast}`.trim() || initialProfile.name || "Patient";
+      const finalDob = d.dob || dob || "1980-01-01";
+      const dynamicAge = calculateAge(finalDob);
 
-    // 1. Conditions with clinical anatomical localization
-    const finalConditions = extractedReview.conditions
-      .filter((c) => c._selected && c.conditionName.trim())
-      .map((c) => {
-        const localized = localizeConditionAnatomically(c.conditionName);
-        return {
-          id: c.id,
-          name: c.conditionName,
-          plainName: c.conditionName,
-          region: localized.region,
-          coords: localized.coords,
-          system: localized.system,
-          isPosterior: localized.isPosterior,
-          onsetDate: c.diagnosisYear || new Date().getFullYear().toString(),
-          status: "Active",
-          notes: c.institution ? `Diagnosed at ${c.institution} (Gemini Extraction)` : "Extracted from clinical PDF record."
-        };
-      });
+      const ecFirst = (emergencyContactFirstName || "").trim();
+      const ecLast = (emergencyContactLastName || "").trim();
+      const combinedEcName = `${ecFirst} ${ecLast}`.trim();
+      const finalEcPhone = (emergencyContactPhone || "").trim();
+      const finalEcRelation = emergencyContactRelation || "Spouse";
+      const formattedContact = combinedEcName
+        ? `${combinedEcName} (${finalEcRelation}) • ${finalEcPhone}`
+        : "N/A";
 
-    // 2. Surgeries with anatomical localization
-    const finalSurgeries = extractedReview.surgeries
-      .filter((s) => s._selected && s.procedureName.trim())
-      .map((s) => {
-        const localized = localizeSurgeryAnatomically(s.procedureName, s.laterality);
-        return {
-          id: s.id,
-          name: s.procedureName,
-          plainName: s.procedureName,
-          site: localized.site,
-          incision: localized.incision,
-          coords: localized.coords,
-          system: localized.system,
-          isPosterior: localized.isPosterior,
-          laterality: s.laterality,
-          approach: s.approach,
-          surgeryDate: s.surgeryYear ? (s.surgeryMonth ? `${s.surgeryYear}-${s.surgeryMonth}` : s.surgeryYear) : "Historical",
-          surgeon: s.surgeonName || "",
-          hospital: "Medical Center",
-          notes: `Extracted via Gemini 1.5 Flash. Approach: ${s.approach}, Laterality: ${s.laterality}`
-        };
-      });
+      // 1. Conditions with clinical anatomical localization
+      const finalConditions = (extractedReview?.conditions || [])
+        .filter((c) => c && c._selected && String(c.conditionName || "").trim().length > 0)
+        .map((c) => {
+          const name = String(c.conditionName || "").trim();
+          const localized = localizeConditionAnatomically(name);
+          return {
+            id: c.id || `cond-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            name,
+            plainName: name,
+            region: localized?.region || "General / Systemic",
+            coords: localized?.coords || { x: 0, y: 0.5, z: 0.8 },
+            system: localized?.system || "general",
+            isPosterior: Boolean(localized?.isPosterior),
+            onsetDate: c.diagnosisYear ? String(c.diagnosisYear) : new Date().getFullYear().toString(),
+            status: "Active",
+            notes: c.institution ? `Diagnosed at ${c.institution} (Gemini Extraction)` : "Extracted from clinical PDF record."
+          };
+        });
 
-    // 3. Medications
-    const finalMeds = extractedReview.medications
-      .filter((m) => m._selected && m.medicationName.trim())
-      .map((m) => ({
-        id: m.id,
-        name: m.medicationName,
-        dosage: m.dose || "Standard Dose",
-        frequency: m.frequency || "Once daily (QD)",
-        startDate: m.startDate || new Date().getFullYear().toString(),
-        indication: m.indication || "General Indication"
-      }));
+      // 2. Surgeries with anatomical localization
+      const finalSurgeries = (extractedReview?.surgeries || [])
+        .filter((s) => s && s._selected && String(s.procedureName || "").trim().length > 0)
+        .map((s) => {
+          const name = String(s.procedureName || "").trim();
+          const localized = localizeSurgeryAnatomically(name, s.laterality);
+          return {
+            id: s.id || `surg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+            name,
+            plainName: name,
+            site: localized?.site || "General Site",
+            incision: localized?.incision || "Surgical Incision",
+            coords: localized?.coords || { x: 0, y: 0.5, z: 0.8 },
+            system: localized?.system || "general",
+            isPosterior: Boolean(localized?.isPosterior),
+            laterality: s.laterality || "Bilateral",
+            approach: s.approach || "Open",
+            surgeryDate: s.surgeryYear ? (s.surgeryMonth ? `${s.surgeryYear}-${s.surgeryMonth}` : String(s.surgeryYear)) : "Historical",
+            surgeon: s.surgeonName || "",
+            hospital: "Medical Center",
+            notes: `Extracted via Gemini 1.5 Flash. Approach: ${s.approach || "Standard"}, Laterality: ${s.laterality || "N/A"}`
+          };
+        });
 
-    // 4. Allergies
-    const finalAllergies = extractedReview.allergies
-      .filter((a) => a._selected && a.drugName.trim())
-      .map((a) => ({
-        id: a.id,
-        medication: a.drugName,
-        reaction: a.reactionType || "Allergic Reaction",
-        severity: "Moderate",
-        notes: a.reactionYear ? `Documented year: ${a.reactionYear}` : "Extracted from clinical PDF"
-      }));
+      // 3. Medications
+      const finalMeds = (extractedReview?.medications || [])
+        .filter((m) => m && m._selected && String(m.medicationName || "").trim().length > 0)
+        .map((m) => ({
+          id: m.id || `med-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          name: String(m.medicationName || "").trim(),
+          dosage: m.dose || "Standard Dose",
+          frequency: m.frequency || "Once daily (QD)",
+          startDate: m.startDate ? String(m.startDate) : new Date().getFullYear().toString(),
+          indication: m.indication || "General Indication"
+        }));
 
-    // 5. Diagnostic procedures
-    const finalProcedures = extractedReview.procedures
-      .filter((p) => p._selected && p.procedureName.trim())
-      .map((p) => ({
-        id: p.id,
-        procedure_name: p.procedureName,
-        plainName: p.procedureName,
-        procedure_type: "Diagnostic Study",
-        date_performed: p.datePerformed || new Date().toISOString().split("T")[0],
-        findings: p.findings || "Documented clinical findings",
-        recall_interval_years: 1
-      }));
+      // 4. Allergies
+      const finalAllergies = (extractedReview?.allergies || [])
+        .filter((a) => a && a._selected && String(a.drugName || "").trim().length > 0)
+        .map((a) => ({
+          id: a.id || `allg-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          medication: String(a.drugName || "").trim(),
+          drugName: String(a.drugName || "").trim(),
+          reaction: a.reactionType || "Allergic Reaction",
+          severity: (a.reactionType && String(a.reactionType).includes("Anaphylaxis")) ? "Severe" : "Moderate",
+          dateDocumented: a.reactionYear ? String(a.reactionYear) : new Date().getFullYear().toString(),
+          notes: a.reactionYear ? `Documented year: ${a.reactionYear}` : "Extracted from clinical PDF"
+        }));
 
-    // 6. Vaccinations
-    const finalVaccines = extractedReview.vaccinations
-      .filter((v) => v._selected && v.vaccineName.trim())
-      .map((v) => ({
-        id: v.id,
-        vaccine_name: v.vaccineName,
-        plainName: v.vaccineName,
-        date_administered: v.dateAdministered || new Date().toISOString().split("T")[0],
-        dose_number: 1,
-        administering_facility: v.lotNumber ? `Lot #${v.lotNumber}` : "Clinical Center"
-      }));
+      // 5. Diagnostic procedures
+      const finalProcedures = (extractedReview?.procedures || [])
+        .filter((p) => p && p._selected && String(p.procedureName || "").trim().length > 0)
+        .map((p) => ({
+          id: p.id || `proc-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          procedure_name: String(p.procedureName || "").trim(),
+          plainName: String(p.procedureName || "").trim(),
+          procedure_type: "Diagnostic Study",
+          date_performed: p.datePerformed || new Date().toISOString().split("T")[0],
+          findings: p.findings || "Documented clinical findings",
+          recall_interval_years: 1
+        }));
 
-    onBatchCommit({
-      profile: {
-        name: finalName,
-        dob: finalDob,
-        age: dynamicAge,
-        sex: d.sex || sex,
-        otherSexSpecification: (d.sex || sex) === "other" ? otherSexSpecification : "",
-        bloodType: d.bloodType || bloodType,
-        emergencyContactName,
-        emergencyContactRelation,
-        emergencyContactPhone,
-        emergencyContact: formattedContact
-      },
-      isNkda: finalAllergies.length === 0,
-      allergiesList: finalAllergies,
-      conditions: finalConditions,
-      surgeries: finalSurgeries,
-      medications: finalMeds,
-      procedures: finalProcedures,
-      vaccinations: finalVaccines
-    });
+      // 6. Vaccinations
+      const finalVaccines = (extractedReview?.vaccinations || [])
+        .filter((v) => v && v._selected && String(v.vaccineName || "").trim().length > 0)
+        .map((v) => ({
+          id: v.id || `vax-${Date.now()}-${Math.random().toString(36).substring(2, 7)}`,
+          vaccine_name: String(v.vaccineName || "").trim(),
+          plainName: String(v.vaccineName || "").trim(),
+          date_administered: v.dateAdministered || new Date().toISOString().split("T")[0],
+          dose_number: 1,
+          administering_facility: v.lotNumber ? `Lot #${v.lotNumber}` : "Clinical Center"
+        }));
 
-    onClose();
+      if (typeof onBatchCommit === "function") {
+        await onBatchCommit({
+          profile: {
+            name: finalName,
+            firstName: finalFirst,
+            lastName: finalLast,
+            dob: finalDob,
+            age: dynamicAge,
+            sex: d.sex || sex || "female",
+            otherSexSpecification: (d.sex || sex) === "other" ? otherSexSpecification : "",
+            bloodType: d.bloodType || bloodType || "I don't know",
+            emergencyContactFirstName: ecFirst,
+            emergencyContactLastName: ecLast,
+            emergencyContactName: combinedEcName,
+            emergencyContactRelation: finalEcRelation,
+            emergencyContactPhone: finalEcPhone,
+            emergencyContact: formattedContact
+          },
+          isNkda: finalAllergies.length === 0,
+          allergiesList: finalAllergies,
+          conditions: finalConditions,
+          surgeries: finalSurgeries,
+          medications: finalMeds,
+          procedures: finalProcedures,
+          vaccinations: finalVaccines
+        });
+      }
+
+      if (typeof onClose === "function") {
+        onClose();
+      }
+    } catch (err) {
+      console.error("Error committing PDF extracted data:", err);
+      setPdfParseError("Could not save to avatar: " + (err?.message || "Unknown error"));
+    }
   };
 
   /* -------------------------------------------------------------
@@ -4995,12 +5020,12 @@ export function PatientOnboardingModal({
                   <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
                   <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">
                     <strong>
-                      {extractedReview.conditions.filter((c) => c._selected).length +
-                        extractedReview.surgeries.filter((s) => s._selected).length +
-                        extractedReview.medications.filter((m) => m._selected).length +
-                        extractedReview.allergies.filter((a) => a._selected).length +
-                        extractedReview.procedures.filter((p) => p._selected).length +
-                        extractedReview.vaccinations.filter((v) => v._selected).length}
+                      {(extractedReview?.conditions || []).filter((c) => c?._selected).length +
+                        (extractedReview?.surgeries || []).filter((s) => s?._selected).length +
+                        (extractedReview?.medications || []).filter((m) => m?._selected).length +
+                        (extractedReview?.allergies || []).filter((a) => a?._selected).length +
+                        (extractedReview?.procedures || []).filter((p) => p?._selected).length +
+                        (extractedReview?.vaccinations || []).filter((v) => v?._selected).length}
                     </strong>{" "}
                     items selected for 3D avatar calibration
                   </span>
