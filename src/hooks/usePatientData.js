@@ -82,14 +82,7 @@ export function usePatientData() {
   const fetchRemoteData = useCallback(async (userId, currentUser) => {
     setSyncStatus("syncing");
     try {
-      const [
-        profileRes,
-        condsRes,
-        surgsRes,
-        medsRes,
-        procsRes,
-        vaxRes
-      ] = await Promise.allSettled([
+      const queriesPromise = Promise.allSettled([
         supabase.from("patient_profile").select("*").eq("user_id", userId).maybeSingle(),
         supabase.from("patient_conditions").select("*").eq("user_id", userId),
         supabase.from("patient_surgeries").select("*").eq("user_id", userId),
@@ -97,6 +90,19 @@ export function usePatientData() {
         supabase.from("patient_procedures").select("*").eq("user_id", userId),
         supabase.from("patient_vaccinations").select("*").eq("user_id", userId)
       ]);
+
+      const timeoutPromise = new Promise((_, reject) =>
+        setTimeout(() => reject(new Error("Supabase remote fetch timeout")), 5000)
+      );
+
+      const [
+        profileRes,
+        condsRes,
+        surgsRes,
+        medsRes,
+        procsRes,
+        vaxRes
+      ] = await Promise.race([queriesPromise, timeoutPromise]);
 
       const profileData = profileRes.status === "fulfilled" && !profileRes.value.error ? profileRes.value.data : null;
       const condsData = condsRes.status === "fulfilled" && !condsRes.value.error ? (condsRes.value.data || []) : null;
@@ -243,7 +249,11 @@ export function usePatientData() {
 
       // Extract structured allergies list from allergies text if available
       let derivedAllergiesList = [];
-      if (newProfile.allergies && newProfile.allergies !== "No Known Drug Allergies (NKDA)") {
+      if (
+        newProfile.allergies &&
+        typeof newProfile.allergies === "string" &&
+        newProfile.allergies !== "No Known Drug Allergies (NKDA)"
+      ) {
         derivedAllergiesList = newProfile.allergies.split(",").map((str, idx) => {
           const match = str.trim().match(/^([^(]+)(?:\(([^)]+)\))?/);
           return {
@@ -283,9 +293,20 @@ export function usePatientData() {
   useEffect(() => {
     let mounted = true;
 
+    // Guaranteed watchdog timer: dismiss authLoading after 2 seconds no matter what
+    const watchdogTimer = setTimeout(() => {
+      if (mounted) {
+        setAuthLoading(false);
+      }
+    }, 2000);
+
     async function checkAuthAndLoad() {
       try {
-        const { data: { session } } = await supabase.auth.getSession();
+        const sessionPromise = supabase.auth.getSession();
+        const timeoutPromise = new Promise((resolve) =>
+          setTimeout(() => resolve({ data: { session: null }, timedOut: true }), 1500)
+        );
+        const { data: { session } } = await Promise.race([sessionPromise, timeoutPromise]);
         if (!mounted) return;
 
         if (session?.user) {
@@ -299,7 +320,12 @@ export function usePatientData() {
               setPatientData(createDefaultBlankPatient(session.user));
             }
           } catch (_) {}
-          await fetchRemoteData(session.user.id, session.user);
+
+          // Release loading screen immediately so the user can interact with their workstation!
+          if (mounted) setAuthLoading(false);
+
+          // Synchronize latest records in the background without blocking the UI
+          fetchRemoteData(session.user.id, session.user);
         } else {
           setUser(null);
           setSyncStatus("local");
@@ -315,10 +341,12 @@ export function usePatientData() {
           } catch (_) {
             setPatientData(JSON.parse(JSON.stringify(DEFAULT_PATIENT_RECORD)));
           }
+          if (mounted) setAuthLoading(false);
         }
       } catch (err) {
         console.warn("Auth check error, operating in local mode:", err);
         setSyncStatus("local");
+        if (mounted) setAuthLoading(false);
       } finally {
         if (mounted) setAuthLoading(false);
       }
@@ -338,7 +366,8 @@ export function usePatientData() {
             setPatientData(createDefaultBlankPatient(session.user));
           }
         } catch (_) {}
-        await fetchRemoteData(session.user.id, session.user);
+        if (mounted) setAuthLoading(false);
+        fetchRemoteData(session.user.id, session.user);
       } else {
         setUser(null);
         setSyncStatus("local");
@@ -354,11 +383,13 @@ export function usePatientData() {
         } catch (_) {
           setPatientData(JSON.parse(JSON.stringify(DEFAULT_PATIENT_RECORD)));
         }
+        if (mounted) setAuthLoading(false);
       }
     });
 
     return () => {
       mounted = false;
+      clearTimeout(watchdogTimer);
       subscription?.unsubscribe();
     };
   }, [fetchRemoteData]);

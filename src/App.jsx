@@ -407,9 +407,20 @@ export default function App() {
 
   if (authLoading) {
     return (
-      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-700 select-none">
+      <div className="h-screen w-screen flex flex-col items-center justify-center bg-slate-50 text-slate-700 select-none p-4">
         <div className="w-9 h-9 border-3 border-teal-700 border-t-transparent rounded-full animate-spin mb-3" />
-        <p className="text-xs font-semibold text-slate-600">Loading Clinical EMR Workstation...</p>
+        <p className="text-xs font-semibold text-slate-700">Loading Clinical EMR Workstation...</p>
+        <p className="text-[11px] text-slate-400 mt-1 text-center">Connecting to clinical database & synchronizing session...</p>
+        <button
+          type="button"
+          onClick={() => {
+            loadDemoData();
+            setIsDemoMode(true);
+          }}
+          className="mt-4 px-3 py-1.5 rounded-lg border border-slate-300 text-xs font-semibold text-teal-800 hover:bg-slate-100 transition-all cursor-pointer shadow-sm"
+        >
+          Taking longer than usual? Launch Demo Workstation
+        </button>
       </div>
     );
   }
