@@ -295,6 +295,181 @@ export function localizeConditionAnatomically(conditionOrName, icd10Code = "") {
   };
 }
 
+/**
+ * Intelligent clinical surgery anatomical localization engine.
+ * Maps surgery names, procedures, and laterality to 3D avatar coordinates,
+ * anatomical region/site, surgical incision description, and body systems.
+ */
+export function localizeSurgeryAnatomically(surgeryOrName, lateralityHint = "") {
+  if (!surgeryOrName) {
+    return {
+      coords: { x: 0.0, y: 3.0, z: 1.0 },
+      site: "Anterior Abdomen / Torso",
+      incision: "Surgical Incision Scar",
+      system: "general",
+      isPosterior: false
+    };
+  }
+
+  const name = typeof surgeryOrName === "string" ? surgeryOrName : (surgeryOrName.name || surgeryOrName.procedureName || "");
+  const laterality = (typeof surgeryOrName === "object" && surgeryOrName.laterality ? surgeryOrName.laterality : lateralityHint || "").toLowerCase();
+  const q = name.toLowerCase();
+  const isLeft = laterality.includes("left") || q.includes("left");
+  const isRight = laterality.includes("right") || q.includes("right");
+
+  // 1. Knee Arthroplasty / Joint Replacement / Meniscus / ACL
+  if (q.includes("knee") || q.includes("menisc") || q.includes("patella") || q.includes("acl") || q.includes("tka")) {
+    const sideLeft = isLeft && !isRight;
+    return {
+      coords: { x: sideLeft ? 0.85 : -0.85, y: -4.55, z: 0.82 },
+      site: sideLeft ? "Left Anterior Knee Joint" : "Right Anterior Knee Joint",
+      incision: "Midline anterior longitudinal knee incision scar",
+      system: "orthopedic_knee",
+      isPosterior: false
+    };
+  }
+
+  // 2. Hip Arthroplasty / Joint Replacement / Femur
+  if (q.includes("hip") || q.includes("tha") || q.includes("femoral") || q.includes("femur")) {
+    const sideLeft = isLeft && !isRight;
+    return {
+      coords: { x: sideLeft ? 1.05 : -1.05, y: -1.2, z: 0.85 },
+      site: sideLeft ? "Left Hip Joint (Trochanteric)" : "Right Hip Joint (Trochanteric)",
+      incision: "Posterolateral hip arthroplasty incision scar",
+      system: "orthopedic_hip",
+      isPosterior: false
+    };
+  }
+
+  // 3. Appendectomy
+  if (q.includes("append")) {
+    return {
+      coords: { x: -0.8, y: 1.2, z: 0.95 },
+      site: "Right Lower Quadrant / McBurney's Point",
+      incision: "Laparoscopic puncture scars in RLQ",
+      system: "digestive",
+      isPosterior: false
+    };
+  }
+
+  // 4. Cholecystectomy / Gallbladder
+  if (q.includes("cholecyst") || q.includes("gallbladder")) {
+    return {
+      coords: { x: -0.92, y: 3.25, z: 1.05 },
+      site: "Right Upper Quadrant (RUQ)",
+      incision: "4-trocar laparoscopic punctures in RUQ",
+      system: "digestive",
+      isPosterior: false
+    };
+  }
+
+  // 5. Cardiac (CABG, Valve Replacement, Stent, Pacemaker)
+  if (q.includes("cabg") || q.includes("bypass") || q.includes("sternotomy") || q.includes("valve") || q.includes("pacemaker") || q.includes("cardiac") || q.includes("angioplasty")) {
+    return {
+      coords: { x: 0.35, y: 4.25, z: 1.1 },
+      site: "Anterior Midline Sternum / Precordium",
+      incision: q.includes("pacemaker") ? "Left subclavicular incision scar (4 cm)" : "Median sternotomy linear scar",
+      system: "cardiac",
+      isPosterior: false
+    };
+  }
+
+  // 6. Cesarean Section / Hysterectomy / Pelvic
+  if (q.includes("cesarean") || q.includes("c-section") || q.includes("hysterectomy") || q.includes("pelvic")) {
+    return {
+      coords: { x: 0.0, y: 0.4, z: 1.15 },
+      site: "Suprapubic Pelvis",
+      incision: "Pfannenstiel horizontal low transverse incision (12 cm)",
+      system: "pelvic",
+      isPosterior: false
+    };
+  }
+
+  // 7. Hernia (Inguinal / Umbilical / Ventral)
+  if (q.includes("hernia")) {
+    if (q.includes("umbilical") || q.includes("ventral")) {
+      return {
+        coords: { x: 0.0, y: 1.8, z: 1.0 },
+        site: "Periumbilical Midline",
+        incision: "Infraumbilical curvilinear incision scar",
+        system: "digestive",
+        isPosterior: false
+      };
+    }
+    const sideLeft = isLeft && !isRight;
+    return {
+      coords: { x: sideLeft ? 0.6 : -0.6, y: 0.5, z: 0.95 },
+      site: sideLeft ? "Left Inguinal Canal" : "Right Inguinal Canal",
+      incision: "Oblique groin inguinal incision scar",
+      system: "pelvic",
+      isPosterior: false
+    };
+  }
+
+  // 8. Spine (Lumbar Fusion, Discectomy, Laminectomy)
+  if (q.includes("spine") || q.includes("lumbar") || q.includes("fusion") || q.includes("laminectomy") || q.includes("discectomy") || q.includes("back")) {
+    if (q.includes("cervical") || q.includes("neck") || q.includes("acdf")) {
+      return {
+        coords: { x: 0.0, y: 5.6, z: -0.8 },
+        site: "Posterior Cervical Spine / Neck",
+        incision: "Midline posterior cervical incision scar",
+        system: "spine",
+        isPosterior: true
+      };
+    }
+    return {
+      coords: { x: 0.0, y: 1.9, z: -0.9 },
+      site: "Lumbar Spine L4-S1 (Posterior)",
+      incision: "Midline posterior lumbar incision scar",
+      system: "spine",
+      isPosterior: true
+    };
+  }
+
+  // 9. Shoulder Arthroscopy / Rotator Cuff
+  if (q.includes("shoulder") || q.includes("rotator") || q.includes("labrum")) {
+    const sideLeft = isLeft && !isRight;
+    return {
+      coords: { x: sideLeft ? 2.3 : -2.3, y: 4.2, z: 0.5 },
+      site: sideLeft ? "Left Glenohumeral Shoulder" : "Right Glenohumeral Shoulder",
+      incision: "Triple arthroscopic shoulder portal scars",
+      system: "orthopedic",
+      isPosterior: false
+    };
+  }
+
+  // 10. Cranial / Eye / Cataract / Thyroid
+  if (q.includes("cataract") || q.includes("eye") || q.includes("cornea")) {
+    const sideLeft = isLeft && !isRight;
+    return {
+      coords: { x: sideLeft ? 0.35 : -0.35, y: 7.2, z: 0.8 },
+      site: sideLeft ? "Left Anterior Ocular Chamber" : "Right Anterior Ocular Chamber",
+      incision: "Micro-incisional clear corneal entry",
+      system: "neurologic",
+      isPosterior: false
+    };
+  }
+
+  if (q.includes("thyroid") || q.includes("thyroidectomy")) {
+    return {
+      coords: { x: 0.0, y: 5.75, z: 0.85 },
+      site: "Anterior Cervical Neck",
+      incision: "Low collar transverse neck incision scar (5 cm)",
+      system: "endocrine",
+      isPosterior: false
+    };
+  }
+
+  // Default: Anterior Midline Torso
+  return {
+    coords: { x: 0.0, y: 2.8, z: 1.0 },
+    site: "Anterior Torso / Abdomen",
+    incision: "Surgical Incision Scar",
+    system: "general",
+    isPosterior: false
+  };
+}
+
 export const CLINICAL_CATALOG = {
   // Common Medical Conditions
   conditions: [

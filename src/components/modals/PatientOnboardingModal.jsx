@@ -23,15 +23,19 @@ import {
   Syringe,
   Layers,
   MapPin,
-  Calendar,
-  Building2,
   Building,
-  HeartHandshake,
-  Info
+  HeartHandshake
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { CLINICAL_CATALOG, calculateAge, MEDICATION_CLINICAL_ASSOCIATIONS } from "../../lib/clinicalCatalog";
+import {
+  CLINICAL_CATALOG,
+  calculateAge,
+  MEDICATION_CLINICAL_ASSOCIATIONS,
+  localizeConditionAnatomically,
+  localizeSurgeryAnatomically
+} from "../../lib/clinicalCatalog";
+import { extractMedicalRecordFromPdf } from "../../services/geminiParser";
 import { searchConditions } from "../../services/ctss.js";
 import { searchMedications, getMedicationStrengths } from "../../services/rxnorm.js";
 import { getStandardVaccines, evaluateVaccineStatus } from "../../services/cdcSchedule.js";
@@ -311,7 +315,7 @@ export function PatientOnboardingModal({
   const [isNkda, setIsNkda] = useState(false);
   const [allergiesList, setAllergiesList] = useState([
     {
-      id: `allg-${Date.now()}`,
+      id: "allg-default-1",
       drugName: "",
       reactionType: "Rash / Hives (Urticaria)",
       approximateDate: ""
@@ -384,17 +388,26 @@ export function PatientOnboardingModal({
     lotNumber: ""
   });
 
-  // PDF Upload State
+  // PDF Upload & Extraction State (Gemini 1.5 Flash Clinical Pipeline)
   const [isParsingPdf, setIsParsingPdf] = useState(false);
   const [pdfFileName, setPdfFileName] = useState("");
   const [pdfParseError, setPdfParseError] = useState("");
-  const [extractedData, setExtractedData] = useState({
-    profile: {},
+  const [isDraggingPdf, setIsDraggingPdf] = useState(false);
+  const [pdfReviewTab, setPdfReviewTab] = useState("all");
+  const [extractedReview, setExtractedReview] = useState({
+    demographics: {
+      firstName: "",
+      lastName: "",
+      dob: "",
+      sex: "other",
+      bloodType: ""
+    },
+    allergies: [],
     conditions: [],
     surgeries: [],
     medications: [],
     procedures: [],
-    vaccines: []
+    vaccinations: []
   });
   const fileInputRef = useRef(null);
 
@@ -1156,14 +1169,13 @@ export function PatientOnboardingModal({
   };
 
   /* -------------------------------------------------------------
-     PDF EXTRACTION HANDLERS
+     PDF EXTRACTION HANDLERS (Gemini 1.5 Flash Pipeline)
   ------------------------------------------------------------- */
-  const handlePdfFileSelect = async (e) => {
-    const file = e.target.files?.[0];
+  const handleProcessPdfFile = async (file) => {
     if (!file) return;
 
-    if (file.type !== "application/pdf" && !file.name.endsWith(".pdf")) {
-      setPdfParseError("Please select a valid PDF health record document.");
+    if (file.type !== "application/pdf" && !file.name.toLowerCase().endsWith(".pdf")) {
+      setPdfParseError("Please provide a valid PDF medical record file (.pdf).");
       return;
     }
 
@@ -1172,163 +1184,275 @@ export function PatientOnboardingModal({
     setPdfParseError("");
 
     try {
-      const arrayBuffer = await file.arrayBuffer();
-      const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
-      const pdfDoc = await loadingTask.promise;
+      const extracted = await extractMedicalRecordFromPdf(file);
 
-      let fullText = "";
-      for (let i = 1; i <= pdfDoc.numPages; i++) {
-        const page = await pdfDoc.getPage(i);
-        const textContent = await page.getTextContent();
-        const pageText = textContent.items.map((item) => item.str).join(" ");
-        fullText += "\n" + pageText;
-      }
+      // Pre-fill demographics into review checklist and local states
+      const demoProfile = extracted.demographics || {};
+      const newFirstName = demoProfile.firstName || firstName || "";
+      const newLastName = demoProfile.lastName || lastName || "";
+      const newDob = demoProfile.dob || dob || "";
+      const newSex = (demoProfile.sex && ["male", "female", "other"].includes(demoProfile.sex.toLowerCase()))
+        ? demoProfile.sex.toLowerCase()
+        : (sex || "other");
+      const newBloodType = demoProfile.bloodType || bloodType || "";
 
-      // Extraction across clinical text
-      const extracted = parseClinicalText(fullText);
-      setExtractedData(extracted);
+      if (demoProfile.firstName) setFirstName(demoProfile.firstName);
+      if (demoProfile.lastName) setLastName(demoProfile.lastName);
+      if (demoProfile.dob) setDob(demoProfile.dob);
+      if (demoProfile.sex) setSex(newSex);
+      if (demoProfile.bloodType) setBloodType(demoProfile.bloodType);
+
+      // Structure all items with _selected: true by default
+      setExtractedReview({
+        demographics: {
+          firstName: newFirstName,
+          lastName: newLastName,
+          dob: newDob,
+          sex: newSex,
+          bloodType: newBloodType
+        },
+        allergies: (extracted.allergies || []).map((a, idx) => ({
+          id: `ext-allergy-${Date.now()}-${idx}`,
+          drugName: a.drugName || "",
+          reactionType: a.reactionType || "Allergic Reaction",
+          reactionYear: a.reactionYear || "",
+          _selected: true
+        })),
+        conditions: (extracted.conditions || []).map((c, idx) => ({
+          id: `ext-cond-${Date.now()}-${idx}`,
+          conditionName: c.conditionName || "",
+          diagnosisYear: c.diagnosisYear || "",
+          institution: c.institution || "",
+          _selected: true
+        })),
+        surgeries: (extracted.surgeries || []).map((s, idx) => ({
+          id: `ext-surg-${Date.now()}-${idx}`,
+          procedureName: s.procedureName || "",
+          laterality: s.laterality || "N/A",
+          approach: s.approach || "N/A",
+          surgeryMonth: s.surgeryMonth || "",
+          surgeryYear: s.surgeryYear || "",
+          surgeonName: s.surgeonName || "",
+          _selected: true
+        })),
+        medications: (extracted.medications || []).map((m, idx) => ({
+          id: `ext-med-${Date.now()}-${idx}`,
+          medicationName: m.medicationName || "",
+          dose: m.dose || "",
+          frequency: m.frequency || "",
+          startDate: m.startDate || "",
+          indication: m.indication || "",
+          _selected: true
+        })),
+        procedures: (extracted.procedures || []).map((p, idx) => ({
+          id: `ext-proc-${Date.now()}-${idx}`,
+          procedureName: p.procedureName || "",
+          datePerformed: p.datePerformed || "",
+          findings: p.findings || "",
+          _selected: true
+        })),
+        vaccinations: (extracted.vaccinations || []).map((v, idx) => ({
+          id: `ext-vax-${Date.now()}-${idx}`,
+          vaccineName: v.vaccineName || "",
+          dateAdministered: v.dateAdministered || "",
+          lotNumber: v.lotNumber || "",
+          _selected: true
+        }))
+      });
+
       setViewMode("pdf_review");
     } catch (err) {
-      console.error("PDF Parsing error:", err);
-      setPdfParseError("Could not read PDF document text. Please ensure the file is not password-protected.");
+      console.error("Clinical PDF Extraction Error:", err);
+      setPdfParseError(
+        err.message || "Failed to extract clinical data from the PDF record. Please verify network connectivity or try another file."
+      );
     } finally {
       setIsParsingPdf(false);
     }
   };
 
-  const parseClinicalText = (text) => {
-    const rawLower = text.toLowerCase();
-    const profile = {};
-    const nameMatch = text.match(/(?:patient\s+name|name)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i);
-    if (nameMatch) profile.name = nameMatch[1].trim();
+  const handlePdfFileSelect = (e) => {
+    const file = e.target.files?.[0];
+    if (file) {
+      handleProcessPdfFile(file);
+    }
+  };
 
-    const dobMatch = text.match(/(?:dob|date\s+of\s+birth|birthdate)[:\s]+([0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{2,4})/i);
-    if (dobMatch) profile.dob = dobMatch[1].trim();
+  // Verification review mutators
+  const toggleItemSelection = (category, id) => {
+    setExtractedReview((prev) => ({
+      ...prev,
+      [category]: prev[category].map((item) =>
+        item.id === id ? { ...item, _selected: !item._selected } : item
+      )
+    }));
+  };
 
-    const matchedConditions = [];
-    (CLINICAL_CATALOG.conditions || []).forEach((c) => {
-      const plain = (c.plainName || "").toLowerCase();
-      const clinical = c.name.toLowerCase();
-      if (rawLower.includes(clinical) || (plain && rawLower.includes(plain))) {
-        matchedConditions.push({
-          id: `cond-pdf-${c.id}`,
-          name: c.name,
-          plainName: c.plainName,
-          region: c.region,
-          coords: c.coords,
-          system: c.system,
-          icd10: c.icd10,
-          onsetDate: new Date().getFullYear().toString(),
-          status: "Active",
-          notes: "Extracted from uploaded health record."
-        });
-      }
+  const toggleCategorySelection = (category, shouldSelect) => {
+    setExtractedReview((prev) => ({
+      ...prev,
+      [category]: prev[category].map((item) => ({ ...item, _selected: shouldSelect }))
+    }));
+  };
+
+  const selectAllVerifiedItems = (shouldSelect) => {
+    setExtractedReview((prev) => {
+      const updated = { ...prev };
+      const categories = ["allergies", "conditions", "surgeries", "medications", "procedures", "vaccinations"];
+      categories.forEach((cat) => {
+        updated[cat] = prev[cat].map((item) => ({ ...item, _selected: shouldSelect }));
+      });
+      return updated;
     });
+  };
 
-    const matchedSurgeries = [];
-    (CLINICAL_CATALOG.surgeries || []).forEach((s) => {
-      const plain = (s.plainName || "").toLowerCase();
-      const clinical = s.name.toLowerCase();
-      if (rawLower.includes(clinical) || (plain && rawLower.includes(plain))) {
-        matchedSurgeries.push({
-          id: `surg-pdf-${s.id}`,
-          name: s.name,
-          plainName: s.plainName,
-          site: s.site,
-          incision: s.incision,
-          coords: s.coords,
-          system: s.system,
-          isPosterior: s.isPosterior || false,
-          surgeryDate: "2022",
-          hospital: "Medical Center",
-          notes: "Extracted from uploaded health record."
-        });
+  const updateItemField = (category, id, field, value) => {
+    setExtractedReview((prev) => ({
+      ...prev,
+      [category]: prev[category].map((item) =>
+        item.id === id ? { ...item, [field]: value } : item
+      )
+    }));
+  };
+
+  const updateDemographicField = (field, value) => {
+    setExtractedReview((prev) => ({
+      ...prev,
+      demographics: {
+        ...prev.demographics,
+        [field]: value
       }
-    });
+    }));
+  };
 
-    const matchedMeds = [];
-    ALPHABETICAL_COMMON_MEDICATIONS.forEach((m) => {
-      const baseName = m.split("(")[0].trim().toLowerCase();
-      if (rawLower.includes(baseName)) {
-        matchedMeds.push({
-          id: `med-pdf-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-          name: m,
-          dosage: "Standard Dose",
-          frequency: "Once daily (QD)",
-          startDate: new Date().getFullYear().toString(),
-          indication: "General Indication"
-        });
-      }
-    });
-
-    const matchedProcs = [];
-    COMMON_PROCEDURES.forEach((p) => {
-      if (rawLower.includes(p.name.toLowerCase()) || rawLower.includes(p.plainName.toLowerCase())) {
-        matchedProcs.push({
-          id: `proc-pdf-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-          procedure_name: p.name,
-          plainName: p.plainName,
-          procedure_type: p.type,
-          date_performed: new Date().toISOString().split("T")[0],
-          anatomical_marker: p.marker,
-          findings: p.findings,
-          recall_interval_years: p.recall
-        });
-      }
-    });
-
-    const matchedVaccines = [];
-    COMMON_VACCINES.forEach((v) => {
-      if (rawLower.includes(v.name.toLowerCase()) || rawLower.includes(v.plainName.toLowerCase())) {
-        matchedVaccines.push({
-          id: `vax-pdf-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
-          vaccine_name: v.name,
-          plainName: v.plainName,
-          date_administered: new Date().toISOString().split("T")[0],
-          dose_number: 1,
-          administering_facility: "Medical Center Clinic"
-        });
-      }
-    });
-
-    return {
-      profile,
-      conditions: matchedConditions,
-      surgeries: matchedSurgeries,
-      medications: matchedMeds,
-      procedures: matchedProcs,
-      vaccines: matchedVaccines
-    };
+  const deleteItem = (category, id) => {
+    setExtractedReview((prev) => ({
+      ...prev,
+      [category]: prev[category].filter((item) => item.id !== id)
+    }));
   };
 
   const handleFinishPdfImport = () => {
-    const finalDob = extractedData.profile?.dob || dob;
+    const d = extractedReview.demographics;
+    const finalName = `${d.firstName || firstName} ${d.lastName || lastName}`.trim() || initialProfile.name || "Patient";
+    const finalDob = d.dob || dob;
     const dynamicAge = calculateAge(finalDob);
     const formattedContact = emergencyContactName.trim()
       ? `${emergencyContactName.trim()} (${emergencyContactRelation}) • ${emergencyContactPhone.trim()}`
       : "N/A";
 
+    // 1. Conditions with clinical anatomical localization
+    const finalConditions = extractedReview.conditions
+      .filter((c) => c._selected && c.conditionName.trim())
+      .map((c) => {
+        const localized = localizeConditionAnatomically(c.conditionName);
+        return {
+          id: c.id,
+          name: c.conditionName,
+          plainName: c.conditionName,
+          region: localized.region,
+          coords: localized.coords,
+          system: localized.system,
+          isPosterior: localized.isPosterior,
+          onsetDate: c.diagnosisYear || new Date().getFullYear().toString(),
+          status: "Active",
+          notes: c.institution ? `Diagnosed at ${c.institution} (Gemini Extraction)` : "Extracted from clinical PDF record."
+        };
+      });
+
+    // 2. Surgeries with anatomical localization
+    const finalSurgeries = extractedReview.surgeries
+      .filter((s) => s._selected && s.procedureName.trim())
+      .map((s) => {
+        const localized = localizeSurgeryAnatomically(s.procedureName, s.laterality);
+        return {
+          id: s.id,
+          name: s.procedureName,
+          plainName: s.procedureName,
+          site: localized.site,
+          incision: localized.incision,
+          coords: localized.coords,
+          system: localized.system,
+          isPosterior: localized.isPosterior,
+          laterality: s.laterality,
+          approach: s.approach,
+          surgeryDate: s.surgeryYear ? (s.surgeryMonth ? `${s.surgeryYear}-${s.surgeryMonth}` : s.surgeryYear) : "Historical",
+          surgeon: s.surgeonName || "",
+          hospital: "Medical Center",
+          notes: `Extracted via Gemini 1.5 Flash. Approach: ${s.approach}, Laterality: ${s.laterality}`
+        };
+      });
+
+    // 3. Medications
+    const finalMeds = extractedReview.medications
+      .filter((m) => m._selected && m.medicationName.trim())
+      .map((m) => ({
+        id: m.id,
+        name: m.medicationName,
+        dosage: m.dose || "Standard Dose",
+        frequency: m.frequency || "Once daily (QD)",
+        startDate: m.startDate || new Date().getFullYear().toString(),
+        indication: m.indication || "General Indication"
+      }));
+
+    // 4. Allergies
+    const finalAllergies = extractedReview.allergies
+      .filter((a) => a._selected && a.drugName.trim())
+      .map((a) => ({
+        id: a.id,
+        medication: a.drugName,
+        reaction: a.reactionType || "Allergic Reaction",
+        severity: "Moderate",
+        notes: a.reactionYear ? `Documented year: ${a.reactionYear}` : "Extracted from clinical PDF"
+      }));
+
+    // 5. Diagnostic procedures
+    const finalProcedures = extractedReview.procedures
+      .filter((p) => p._selected && p.procedureName.trim())
+      .map((p) => ({
+        id: p.id,
+        procedure_name: p.procedureName,
+        plainName: p.procedureName,
+        procedure_type: "Diagnostic Study",
+        date_performed: p.datePerformed || new Date().toISOString().split("T")[0],
+        findings: p.findings || "Documented clinical findings",
+        recall_interval_years: 1
+      }));
+
+    // 6. Vaccinations
+    const finalVaccines = extractedReview.vaccinations
+      .filter((v) => v._selected && v.vaccineName.trim())
+      .map((v) => ({
+        id: v.id,
+        vaccine_name: v.vaccineName,
+        plainName: v.vaccineName,
+        date_administered: v.dateAdministered || new Date().toISOString().split("T")[0],
+        dose_number: 1,
+        administering_facility: v.lotNumber ? `Lot #${v.lotNumber}` : "Clinical Center"
+      }));
+
     onBatchCommit({
       profile: {
-        name: extractedData.profile?.name || `${firstName} ${lastName}`.trim() || initialProfile.name || "Patient",
+        name: finalName,
         dob: finalDob,
         age: dynamicAge,
-        sex,
-        otherSexSpecification: sex === "other" ? otherSexSpecification : "",
-        bloodType,
+        sex: d.sex || sex,
+        otherSexSpecification: (d.sex || sex) === "other" ? otherSexSpecification : "",
+        bloodType: d.bloodType || bloodType,
         emergencyContactName,
         emergencyContactRelation,
         emergencyContactPhone,
         emergencyContact: formattedContact
       },
-      isNkda: false,
-      allergiesList: [],
-      conditions: extractedData.conditions,
-      surgeries: extractedData.surgeries,
-      medications: extractedData.medications,
-      procedures: extractedData.procedures,
-      vaccinations: extractedData.vaccines
+      isNkda: finalAllergies.length === 0,
+      allergiesList: finalAllergies,
+      conditions: finalConditions,
+      surgeries: finalSurgeries,
+      medications: finalMeds,
+      procedures: finalProcedures,
+      vaccinations: finalVaccines
     });
+
     onClose();
   };
 
@@ -3833,202 +3957,920 @@ export function PatientOnboardingModal({
             </div>
           )}
 
-          {/* VIEW 3: PDF UPLOAD SCREEN */}
+          {/* VIEW 3: SMART PDF RECORD UPLOAD SCREEN (Gemini 1.5 Flash Pipeline) */}
           {viewMode === "pdf_upload" && (
-            <div className="space-y-6 max-w-2xl mx-auto my-auto py-4">
+            <div className="space-y-6 max-w-3xl mx-auto my-auto py-4">
+              {/* Drag and Drop Zone */}
               <div
-                onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-indigo-300 dark:border-indigo-700/60 hover:border-indigo-500 bg-indigo-50/20 hover:bg-indigo-50/50 dark:bg-slate-800/40 rounded-3xl p-10 text-center cursor-pointer transition-all shadow-xs"
+                onDragOver={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingPdf(true);
+                }}
+                onDragEnter={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingPdf(true);
+                }}
+                onDragLeave={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingPdf(false);
+                }}
+                onDrop={(e) => {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  setIsDraggingPdf(false);
+                  const file = e.dataTransfer?.files?.[0];
+                  if (file) {
+                    handleProcessPdfFile(file);
+                  }
+                }}
+                onClick={() => !isParsingPdf && fileInputRef.current?.click()}
+                className={`relative border-2 border-dashed rounded-3xl p-10 text-center cursor-pointer transition-all duration-200 shadow-xs ${
+                  isDraggingPdf
+                    ? "border-indigo-600 bg-indigo-100/60 dark:bg-indigo-950/50 ring-4 ring-indigo-400/30 scale-[1.01]"
+                    : "border-indigo-300 dark:border-indigo-700/60 hover:border-indigo-500 bg-indigo-50/25 hover:bg-indigo-50/60 dark:bg-slate-800/40 hover:dark:bg-slate-800/70"
+                }`}
               >
-                <div className="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 flex items-center justify-center mx-auto mb-4">
-                  <Upload className="w-7 h-7" />
-                </div>
-                <h4 className="text-base font-bold text-slate-900 dark:text-white">
-                  {isParsingPdf ? "Parsing Document Locally in Memory..." : "Upload Clinical Summary or Discharge PDF"}
-                </h4>
-                <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
-                  Drag and drop your PDF medical record here, or click to browse files on your device.
-                </p>
+                {isParsingPdf ? (
+                  <div className="py-4 space-y-4 animate-in fade-in duration-200">
+                    <div className="relative w-16 h-16 mx-auto flex items-center justify-center">
+                      <div className="absolute inset-0 rounded-full border-4 border-indigo-200 dark:border-indigo-900 border-t-indigo-600 dark:border-t-indigo-400 animate-spin" />
+                      <Sparkles className="w-7 h-7 text-indigo-600 dark:text-indigo-400 animate-pulse" />
+                    </div>
+                    <div>
+                      {/* Strictly required user-facing loading label */}
+                      <h4 className="text-lg font-bold text-slate-900 dark:text-white flex items-center justify-center gap-2">
+                        <span>Extracting health data...</span>
+                      </h4>
+                      <p className="text-xs text-indigo-700 dark:text-indigo-300 font-medium mt-1.5">
+                        Analyzing "{pdfFileName}" with Google Gemini 1.5 Flash
+                      </p>
+                      <p className="text-xs text-slate-500 dark:text-slate-400 mt-1 max-w-md mx-auto">
+                        Extracting past medical history, surgical approach & laterality, medications, drug allergies, procedures, and immunizations...
+                      </p>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    <div className="w-16 h-16 rounded-2xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 flex items-center justify-center mx-auto mb-4 shadow-inner">
+                      <Upload className="w-8 h-8" />
+                    </div>
+                    <h4 className="text-base font-bold text-slate-900 dark:text-white">
+                      Upload Clinical Summary or Discharge PDF
+                    </h4>
+                    <p className="text-xs text-slate-500 dark:text-slate-400 mt-2 max-w-md mx-auto leading-relaxed">
+                      Drag and drop your medical record PDF here, or click to browse files on your device.
+                    </p>
+                    <div className="inline-flex items-center gap-2 px-3.5 py-1.5 mt-4 rounded-full bg-indigo-100/70 dark:bg-indigo-900/40 text-indigo-800 dark:text-indigo-200 text-xs font-semibold">
+                      <Sparkles className="w-3.5 h-3.5 text-indigo-600 dark:text-indigo-400" />
+                      <span>Powered by Google Gen AI (gemini-1.5-flash)</span>
+                    </div>
+                  </>
+                )}
+
                 <input
                   ref={fileInputRef}
                   type="file"
                   accept="application/pdf"
                   onChange={handlePdfFileSelect}
                   className="hidden"
+                  disabled={isParsingPdf}
                 />
               </div>
 
+              {/* User-facing error alert banner */}
               {pdfParseError && (
-                <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200 flex items-center gap-2">
-                  <AlertCircle className="w-4 h-4 shrink-0" />
-                  <span>{pdfParseError}</span>
+                <div className="p-4 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 text-xs rounded-2xl border border-rose-200 dark:border-rose-900/60 flex items-start justify-between gap-3 shadow-sm animate-in fade-in">
+                  <div className="flex items-start gap-3">
+                    <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                    <div>
+                      <p className="font-bold text-sm text-rose-900 dark:text-rose-100">
+                        Unable to extract health record
+                      </p>
+                      <p className="mt-1 text-rose-700 dark:text-rose-300 leading-relaxed">
+                        {pdfParseError}
+                      </p>
+                    </div>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setPdfParseError("");
+                      fileInputRef.current?.click();
+                    }}
+                    className="px-3 py-1.5 bg-rose-100 dark:bg-rose-900/60 hover:bg-rose-200 dark:hover:bg-rose-900 text-rose-800 dark:text-rose-200 font-bold rounded-lg text-xs shrink-0 transition-colors"
+                  >
+                    Try Again
+                  </button>
                 </div>
               )}
 
-              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 space-y-1.5">
+              {/* Extraction Details & Pipeline Info */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 space-y-2">
                 <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
                   <ShieldCheck className="w-4 h-4 text-teal-600" />
-                  <span>How Private Client-Side Parsing Works:</span>
+                  <span>Automated Structured Clinical Extraction:</span>
                 </div>
-                <p>
-                  1. The file is interpreted directly by <strong>Mozilla PDF.js</strong> running entirely in your browser sandbox.
-                </p>
-                <p>
-                  2. Regular expressions extract medical diagnoses, surgeries, prescription dosing, and diagnostic studies.
-                </p>
-                <p>
-                  3. You will be able to review, edit, or remove any item on the verification card before saving.
-                </p>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 text-slate-600 dark:text-slate-400">
+                  <div className="flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 shrink-0" />
+                    <span>Extracts diagnoses, surgical approach & laterality</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 shrink-0" />
+                    <span>Captures active medications, doses, and drug allergies</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 shrink-0" />
+                    <span>Strict JSON Schema validation with zero data hallucination</span>
+                  </div>
+                  <div className="flex items-start gap-2">
+                    <div className="w-1.5 h-1.5 rounded-full bg-teal-500 mt-1.5 shrink-0" />
+                    <span>Interactive verification drawer with full user control before saving</span>
+                  </div>
+                </div>
               </div>
             </div>
           )}
 
-          {/* VIEW 4: PDF REVIEW & VERIFICATION CHECKLIST */}
+          {/* VIEW 4: PDF REVIEW & VERIFICATION CHECKLIST (Drawer / Verification Modal) */}
           {viewMode === "pdf_review" && (
-            <div className="space-y-5 animate-in fade-in duration-150">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
+            <div className="space-y-4 animate-in fade-in duration-150">
+              {/* Header with File Info and Global Selection Actions */}
+              <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 pb-3 border-b border-slate-200 dark:border-slate-800">
                 <div>
-                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
-                    Verification Checklist: Extracted from "{pdfFileName}"
-                  </h3>
-                  <p className="text-xs text-slate-500 mt-0.5">
-                    Review extracted findings. Items will be calibrated onto your 3D avatar upon confirmation.
+                  <div className="flex items-center gap-2">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                      Verify Extracted Health Data
+                    </h3>
+                    <span className="px-2 py-0.5 rounded-md bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 text-[10px] font-bold uppercase tracking-wider">
+                      Gemini 1.5 Flash
+                    </span>
+                  </div>
+                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                    Extracted from <span className="font-semibold text-slate-700 dark:text-slate-300">"{pdfFileName}"</span>.
+                    Verify, correct, or deselect entries before calibration to your 3D avatar.
                   </p>
                 </div>
+                <div className="flex items-center gap-2 shrink-0">
+                  <button
+                    type="button"
+                    onClick={() => selectAllVerifiedItems(true)}
+                    className="text-xs font-bold text-teal-700 dark:text-teal-400 hover:underline px-2 py-1 rounded-md hover:bg-teal-50 dark:hover:bg-teal-950/30"
+                  >
+                    Select All
+                  </button>
+                  <span className="text-slate-300 dark:text-slate-700">|</span>
+                  <button
+                    type="button"
+                    onClick={() => selectAllVerifiedItems(false)}
+                    className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:underline px-2 py-1 rounded-md hover:bg-slate-100 dark:hover:bg-slate-800"
+                  >
+                    Deselect All
+                  </button>
+                  <span className="text-slate-300 dark:text-slate-700">|</span>
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("pdf_upload")}
+                    className="text-xs font-bold text-indigo-700 dark:text-indigo-400 hover:underline px-2 py-1 rounded-md hover:bg-indigo-50 dark:hover:bg-indigo-950/30"
+                  >
+                    Upload Another File
+                  </button>
+                </div>
+              </div>
+
+              {/* Demographics Card (Editable inline) */}
+              <div className="p-4 rounded-2xl bg-slate-50 dark:bg-slate-800/60 border border-slate-200 dark:border-slate-800">
+                <div className="flex items-center gap-2 mb-3 text-xs font-bold text-slate-800 dark:text-slate-200">
+                  <User className="w-4 h-4 text-indigo-600 dark:text-indigo-400" />
+                  <span>Patient Demographics</span>
+                </div>
+                <div className="grid grid-cols-2 sm:grid-cols-5 gap-3">
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">First Name</label>
+                    <input
+                      type="text"
+                      value={extractedReview.demographics.firstName}
+                      onChange={(e) => updateDemographicField("firstName", e.target.value)}
+                      placeholder="First Name"
+                      className="w-full mt-1 text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Last Name</label>
+                    <input
+                      type="text"
+                      value={extractedReview.demographics.lastName}
+                      onChange={(e) => updateDemographicField("lastName", e.target.value)}
+                      placeholder="Last Name"
+                      className="w-full mt-1 text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Date of Birth</label>
+                    <input
+                      type="date"
+                      value={extractedReview.demographics.dob}
+                      onChange={(e) => updateDemographicField("dob", e.target.value)}
+                      className="w-full mt-1 text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Sex</label>
+                    <select
+                      value={extractedReview.demographics.sex}
+                      onChange={(e) => updateDemographicField("sex", e.target.value)}
+                      className="w-full mt-1 text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-1 focus:ring-indigo-500"
+                    >
+                      <option value="female">Female</option>
+                      <option value="male">Male</option>
+                      <option value="other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                    <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 uppercase">Blood Type</label>
+                    <input
+                      type="text"
+                      value={extractedReview.demographics.bloodType}
+                      onChange={(e) => updateDemographicField("bloodType", e.target.value)}
+                      placeholder="e.g. O+, A-, AB+"
+                      className="w-full mt-1 text-xs px-2.5 py-1.5 rounded-lg border border-slate-300 dark:border-slate-700 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:ring-1 focus:ring-indigo-500"
+                    />
+                  </div>
+                </div>
+              </div>
+
+              {/* Category Filter Tabs */}
+              <div className="flex items-center gap-1.5 overflow-x-auto pb-1 border-b border-slate-200 dark:border-slate-800 scrollbar-none text-xs">
                 <button
                   type="button"
-                  onClick={() => setViewMode("pdf_upload")}
-                  className="text-xs font-bold text-indigo-700 dark:text-indigo-400 hover:underline"
+                  onClick={() => setPdfReviewTab("all")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap ${
+                    pdfReviewTab === "all"
+                      ? "bg-indigo-600 text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
                 >
-                  Upload Another File
+                  All Items (
+                  {extractedReview.conditions.length +
+                    extractedReview.surgeries.length +
+                    extractedReview.medications.length +
+                    extractedReview.allergies.length +
+                    extractedReview.procedures.length +
+                    extractedReview.vaccinations.length}
+                  )
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfReviewTab("conditions")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap ${
+                    pdfReviewTab === "conditions"
+                      ? "bg-teal-700 text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  Conditions ({extractedReview.conditions.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfReviewTab("surgeries")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap ${
+                    pdfReviewTab === "surgeries"
+                      ? "bg-indigo-700 text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  Surgeries ({extractedReview.surgeries.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfReviewTab("medications")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap ${
+                    pdfReviewTab === "medications"
+                      ? "bg-amber-600 text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  Medications ({extractedReview.medications.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfReviewTab("allergies")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap ${
+                    pdfReviewTab === "allergies"
+                      ? "bg-rose-700 text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  Allergies ({extractedReview.allergies.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfReviewTab("procedures")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap ${
+                    pdfReviewTab === "procedures"
+                      ? "bg-sky-700 text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  Procedures ({extractedReview.procedures.length})
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setPdfReviewTab("vaccinations")}
+                  className={`px-3 py-1.5 rounded-lg font-bold transition-all whitespace-nowrap ${
+                    pdfReviewTab === "vaccinations"
+                      ? "bg-emerald-700 text-white shadow-xs"
+                      : "text-slate-600 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800"
+                  }`}
+                >
+                  Vaccines ({extractedReview.vaccinations.length})
                 </button>
               </div>
 
-              {/* Four-Column Extracted Cards Review Grid */}
-              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
-                {/* Conditions */}
-                <div className="p-4 rounded-2xl bg-teal-50/40 border border-teal-200 dark:bg-slate-800 dark:border-teal-900/60 space-y-2.5">
-                  <div className="flex items-center justify-between text-xs font-bold text-teal-900 dark:text-teal-200">
-                    <span className="flex items-center gap-1.5">
-                      <Activity className="w-4 h-4 text-teal-600" />
-                      <span>Conditions ({extractedData.conditions.length})</span>
-                    </span>
-                  </div>
-                  {extractedData.conditions.length === 0 ? (
-                    <div className="text-xs text-slate-400 italic py-2">No conditions detected</div>
-                  ) : (
-                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                      {extractedData.conditions.map((c, i) => (
-                        <div key={i} className="p-2 bg-white dark:bg-slate-900 rounded-lg border text-xs flex items-center justify-between">
-                          <span className="font-bold truncate">{c.plainName || c.name}</span>
-                          <button
-                            type="button"
-                            onClick={() => setExtractedData((prev) => ({ ...prev, conditions: prev.conditions.filter((_, idx) => idx !== i) }))}
-                            className="text-slate-400 hover:text-rose-600 p-0.5"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
+              {/* Categorized Review Sections */}
+              <div className="space-y-4 max-h-[48vh] overflow-y-auto pr-1">
+                {/* 1. CONDITIONS */}
+                {(pdfReviewTab === "all" || pdfReviewTab === "conditions") && (
+                  <div className="p-4 rounded-2xl bg-teal-50/40 dark:bg-slate-800/70 border border-teal-200 dark:border-teal-900/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-teal-600" />
+                        <h4 className="text-xs font-bold text-teal-950 dark:text-teal-200 uppercase tracking-wider">
+                          Medical Conditions ({extractedReview.conditions.filter((c) => c._selected).length}/
+                          {extractedReview.conditions.length})
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleCategorySelection("conditions", true)}
+                          className="text-[11px] font-bold text-teal-700 dark:text-teal-400 hover:underline"
+                        >
+                          Check All
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleCategorySelection("conditions", false)}
+                          className="text-[11px] font-bold text-slate-500 hover:underline"
+                        >
+                          Uncheck All
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Surgeries */}
-                <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-200 dark:bg-slate-800 dark:border-indigo-900/60 space-y-2.5">
-                  <div className="flex items-center justify-between text-xs font-bold text-indigo-900 dark:text-indigo-200">
-                    <span className="flex items-center gap-1.5">
-                      <Heart className="w-4 h-4 text-indigo-600" />
-                      <span>Surgeries ({extractedData.surgeries.length})</span>
-                    </span>
+                    {extractedReview.conditions.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic py-2">No past medical conditions detected in document.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        {extractedReview.conditions.map((item) => {
+                          const localized = localizeConditionAnatomically(item.conditionName);
+                          return (
+                            <div
+                              key={item.id}
+                              className={`p-3 rounded-xl border transition-all text-xs flex flex-col justify-between gap-2 ${
+                                item._selected
+                                  ? "bg-white dark:bg-slate-900 border-teal-200 dark:border-teal-900/80 shadow-xs"
+                                  : "bg-slate-50/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60"
+                              }`}
+                            >
+                              <div className="flex items-start gap-2.5">
+                                <input
+                                  type="checkbox"
+                                  checked={item._selected}
+                                  onChange={() => toggleItemSelection("conditions", item.id)}
+                                  className="mt-1 w-4 h-4 rounded text-teal-600 focus:ring-teal-500 cursor-pointer"
+                                />
+                                <div className="flex-1 space-y-1.5">
+                                  <input
+                                    type="text"
+                                    value={item.conditionName}
+                                    onChange={(e) => updateItemField("conditions", item.id, "conditionName", e.target.value)}
+                                    placeholder="Condition Name"
+                                    className="w-full font-bold text-slate-900 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 focus:border-teal-500 focus:outline-none"
+                                  />
+                                  <div className="flex flex-wrap items-center gap-2 text-[11px]">
+                                    <input
+                                      type="text"
+                                      value={item.diagnosisYear}
+                                      onChange={(e) => updateItemField("conditions", item.id, "diagnosisYear", e.target.value)}
+                                      placeholder="Year Diagnosed"
+                                      className="w-24 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                    />
+                                    <input
+                                      type="text"
+                                      value={item.institution}
+                                      onChange={(e) => updateItemField("conditions", item.id, "institution", e.target.value)}
+                                      placeholder="Institution"
+                                      className="flex-1 min-w-[120px] px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                    />
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteItem("conditions", item.id)}
+                                  className="text-slate-400 hover:text-rose-600 p-1 rounded-md"
+                                  title="Delete item"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[10px] text-teal-700 dark:text-teal-400 pl-6">
+                                <MapPin className="w-3 h-3 shrink-0" />
+                                <span className="truncate">3D Avatar: {localized.region}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  {extractedData.surgeries.length === 0 ? (
-                    <div className="text-xs text-slate-400 italic py-2">No surgeries detected</div>
-                  ) : (
-                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                      {extractedData.surgeries.map((s, i) => (
-                        <div key={i} className="p-2 bg-white dark:bg-slate-900 rounded-lg border text-xs flex items-center justify-between">
-                          <span className="font-bold truncate">{s.plainName || s.name}</span>
-                          <button
-                            type="button"
-                            onClick={() => setExtractedData((prev) => ({ ...prev, surgeries: prev.surgeries.filter((_, idx) => idx !== i) }))}
-                            className="text-slate-400 hover:text-rose-600 p-0.5"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-                  )}
-                </div>
+                )}
 
-                {/* Medications */}
-                <div className="p-4 rounded-2xl bg-amber-50/40 border border-amber-200 dark:bg-slate-800 dark:border-amber-900/60 space-y-2.5">
-                  <div className="flex items-center justify-between text-xs font-bold text-amber-900 dark:text-amber-200">
-                    <span className="flex items-center gap-1.5">
-                      <Pill className="w-4 h-4 text-amber-600" />
-                      <span>Medications ({extractedData.medications.length})</span>
-                    </span>
-                  </div>
-                  {extractedData.medications.length === 0 ? (
-                    <div className="text-xs text-slate-400 italic py-2">No medications detected</div>
-                  ) : (
-                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                      {extractedData.medications.map((m, i) => (
-                        <div key={i} className="p-2 bg-white dark:bg-slate-900 rounded-lg border text-xs flex items-center justify-between">
-                          <span className="font-bold truncate">{m.name}</span>
-                          <button
-                            type="button"
-                            onClick={() => setExtractedData((prev) => ({ ...prev, medications: prev.medications.filter((_, idx) => idx !== i) }))}
-                            className="text-slate-400 hover:text-rose-600 p-0.5"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
+                {/* 2. SURGERIES */}
+                {(pdfReviewTab === "all" || pdfReviewTab === "surgeries") && (
+                  <div className="p-4 rounded-2xl bg-indigo-50/40 dark:bg-slate-800/70 border border-indigo-200 dark:border-indigo-900/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Heart className="w-4 h-4 text-indigo-600" />
+                        <h4 className="text-xs font-bold text-indigo-950 dark:text-indigo-200 uppercase tracking-wider">
+                          Surgical History ({extractedReview.surgeries.filter((s) => s._selected).length}/
+                          {extractedReview.surgeries.length})
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleCategorySelection("surgeries", true)}
+                          className="text-[11px] font-bold text-indigo-700 dark:text-indigo-400 hover:underline"
+                        >
+                          Check All
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleCategorySelection("surgeries", false)}
+                          className="text-[11px] font-bold text-slate-500 hover:underline"
+                        >
+                          Uncheck All
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
 
-                {/* Procedures & Vaccines */}
-                <div className="p-4 rounded-2xl bg-sky-50/40 border border-sky-200 dark:bg-slate-800 dark:border-sky-900/60 space-y-2.5">
-                  <div className="flex items-center justify-between text-xs font-bold text-sky-900 dark:text-sky-200">
-                    <span className="flex items-center gap-1.5">
-                      <FileSearch className="w-4 h-4 text-sky-600" />
-                      <span>Tests & Vaccines ({extractedData.procedures.length + extractedData.vaccines.length})</span>
-                    </span>
+                    {extractedReview.surgeries.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic py-2">No surgical history detected in document.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        {extractedReview.surgeries.map((item) => {
+                          const localized = localizeSurgeryAnatomically(item.procedureName, item.laterality);
+                          return (
+                            <div
+                              key={item.id}
+                              className={`p-3 rounded-xl border transition-all text-xs flex flex-col justify-between gap-2 ${
+                                item._selected
+                                  ? "bg-white dark:bg-slate-900 border-indigo-200 dark:border-indigo-900/80 shadow-xs"
+                                  : "bg-slate-50/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60"
+                              }`}
+                            >
+                              <div className="flex items-start gap-2.5">
+                                <input
+                                  type="checkbox"
+                                  checked={item._selected}
+                                  onChange={() => toggleItemSelection("surgeries", item.id)}
+                                  className="mt-1 w-4 h-4 rounded text-indigo-600 focus:ring-indigo-500 cursor-pointer"
+                                />
+                                <div className="flex-1 space-y-1.5">
+                                  <input
+                                    type="text"
+                                    value={item.procedureName}
+                                    onChange={(e) => updateItemField("surgeries", item.id, "procedureName", e.target.value)}
+                                    placeholder="Procedure Name"
+                                    className="w-full font-bold text-slate-900 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 focus:border-indigo-500 focus:outline-none"
+                                  />
+                                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 text-[11px]">
+                                    <select
+                                      value={item.laterality}
+                                      onChange={(e) => updateItemField("surgeries", item.id, "laterality", e.target.value)}
+                                      className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                    >
+                                      <option value="Left">Left</option>
+                                      <option value="Right">Right</option>
+                                      <option value="Bilateral">Bilateral</option>
+                                      <option value="N/A">Laterality N/A</option>
+                                    </select>
+                                    <select
+                                      value={item.approach}
+                                      onChange={(e) => updateItemField("surgeries", item.id, "approach", e.target.value)}
+                                      className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                    >
+                                      <option value="Total">Total</option>
+                                      <option value="Partial">Partial</option>
+                                      <option value="N/A">Approach N/A</option>
+                                    </select>
+                                    <input
+                                      type="text"
+                                      value={item.surgeryYear}
+                                      onChange={(e) => updateItemField("surgeries", item.id, "surgeryYear", e.target.value)}
+                                      placeholder="Year"
+                                      className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                    />
+                                    <input
+                                      type="text"
+                                      value={item.surgeonName}
+                                      onChange={(e) => updateItemField("surgeries", item.id, "surgeonName", e.target.value)}
+                                      placeholder="Surgeon"
+                                      className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                    />
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => deleteItem("surgeries", item.id)}
+                                  className="text-slate-400 hover:text-rose-600 p-1 rounded-md"
+                                  title="Delete item"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                              <div className="flex items-center gap-1.5 text-[10px] text-indigo-700 dark:text-indigo-400 pl-6">
+                                <MapPin className="w-3 h-3 shrink-0" />
+                                <span className="truncate">Incision/Site: {localized.site}</span>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+                    )}
                   </div>
-                  {extractedData.procedures.length === 0 && extractedData.vaccines.length === 0 ? (
-                    <div className="text-xs text-slate-400 italic py-2">No studies detected</div>
-                  ) : (
-                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
-                      {extractedData.procedures.map((p, i) => (
-                        <div key={`p-${i}`} className="p-2 bg-white dark:bg-slate-900 rounded-lg border text-xs flex items-center justify-between">
-                          <span className="font-bold truncate">{p.plainName || p.procedure_name}</span>
-                          <button
-                            type="button"
-                            onClick={() => setExtractedData((prev) => ({ ...prev, procedures: prev.procedures.filter((_, idx) => idx !== i) }))}
-                            className="text-slate-400 hover:text-rose-600 p-0.5"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
-                      {extractedData.vaccines.map((v, i) => (
-                        <div key={`v-${i}`} className="p-2 bg-white dark:bg-slate-900 rounded-lg border text-xs flex items-center justify-between">
-                          <span className="font-bold truncate">{v.plainName || v.vaccine_name}</span>
-                          <button
-                            type="button"
-                            onClick={() => setExtractedData((prev) => ({ ...prev, vaccines: prev.vaccines.filter((_, idx) => idx !== i) }))}
-                            className="text-slate-400 hover:text-rose-600 p-0.5"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
-                        </div>
-                      ))}
+                )}
+
+                {/* 3. MEDICATIONS */}
+                {(pdfReviewTab === "all" || pdfReviewTab === "medications") && (
+                  <div className="p-4 rounded-2xl bg-amber-50/40 dark:bg-slate-800/70 border border-amber-200 dark:border-amber-900/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Pill className="w-4 h-4 text-amber-600" />
+                        <h4 className="text-xs font-bold text-amber-950 dark:text-amber-200 uppercase tracking-wider">
+                          Active Medications ({extractedReview.medications.filter((m) => m._selected).length}/
+                          {extractedReview.medications.length})
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleCategorySelection("medications", true)}
+                          className="text-[11px] font-bold text-amber-700 dark:text-amber-400 hover:underline"
+                        >
+                          Check All
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleCategorySelection("medications", false)}
+                          className="text-[11px] font-bold text-slate-500 hover:underline"
+                        >
+                          Uncheck All
+                        </button>
+                      </div>
                     </div>
-                  )}
-                </div>
+
+                    {extractedReview.medications.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic py-2">No active medications detected in document.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        {extractedReview.medications.map((item) => (
+                          <div
+                            key={item.id}
+                            className={`p-3 rounded-xl border transition-all text-xs flex flex-col justify-between gap-2 ${
+                              item._selected
+                                ? "bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-900/80 shadow-xs"
+                                : "bg-slate-50/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60"
+                            }`}
+                          >
+                            <div className="flex items-start gap-2.5">
+                              <input
+                                type="checkbox"
+                                checked={item._selected}
+                                onChange={() => toggleItemSelection("medications", item.id)}
+                                className="mt-1 w-4 h-4 rounded text-amber-600 focus:ring-amber-500 cursor-pointer"
+                              />
+                              <div className="flex-1 space-y-1.5">
+                                <input
+                                  type="text"
+                                  value={item.medicationName}
+                                  onChange={(e) => updateItemField("medications", item.id, "medicationName", e.target.value)}
+                                  placeholder="Medication Name"
+                                  className="w-full font-bold text-slate-900 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 focus:border-amber-500 focus:outline-none"
+                                />
+                                <div className="grid grid-cols-3 gap-1.5 text-[11px]">
+                                  <input
+                                    type="text"
+                                    value={item.dose}
+                                    onChange={(e) => updateItemField("medications", item.id, "dose", e.target.value)}
+                                    placeholder="Dose"
+                                    className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={item.frequency}
+                                    onChange={(e) => updateItemField("medications", item.id, "frequency", e.target.value)}
+                                    placeholder="Frequency"
+                                    className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                  />
+                                  <input
+                                    type="text"
+                                    value={item.indication}
+                                    onChange={(e) => updateItemField("medications", item.id, "indication", e.target.value)}
+                                    placeholder="Indication"
+                                    className="px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                  />
+                                </div>
+                              </div>
+                              <button
+                                type="button"
+                                onClick={() => deleteItem("medications", item.id)}
+                                className="text-slate-400 hover:text-rose-600 p-1 rounded-md"
+                                title="Delete item"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 4. ALLERGIES */}
+                {(pdfReviewTab === "all" || pdfReviewTab === "allergies") && (
+                  <div className="p-4 rounded-2xl bg-rose-50/40 dark:bg-slate-800/70 border border-rose-200 dark:border-rose-900/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Shield className="w-4 h-4 text-rose-600" />
+                        <h4 className="text-xs font-bold text-rose-950 dark:text-rose-200 uppercase tracking-wider">
+                          Drug Allergies ({extractedReview.allergies.filter((a) => a._selected).length}/
+                          {extractedReview.allergies.length})
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleCategorySelection("allergies", true)}
+                          className="text-[11px] font-bold text-rose-700 dark:text-rose-400 hover:underline"
+                        >
+                          Check All
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleCategorySelection("allergies", false)}
+                          className="text-[11px] font-bold text-slate-500 hover:underline"
+                        >
+                          Uncheck All
+                        </button>
+                      </div>
+                    </div>
+
+                    {extractedReview.allergies.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic py-2">No documented drug allergies detected (NKDA).</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        {extractedReview.allergies.map((item) => (
+                          <div
+                            key={item.id}
+                            className={`p-3 rounded-xl border transition-all text-xs flex items-start gap-2.5 ${
+                              item._selected
+                                ? "bg-white dark:bg-slate-900 border-rose-200 dark:border-rose-900/80 shadow-xs"
+                                : "bg-slate-50/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={item._selected}
+                              onChange={() => toggleItemSelection("allergies", item.id)}
+                              className="mt-1 w-4 h-4 rounded text-rose-600 focus:ring-rose-500 cursor-pointer"
+                            />
+                            <div className="flex-1 space-y-1.5">
+                              <input
+                                type="text"
+                                value={item.drugName}
+                                onChange={(e) => updateItemField("allergies", item.id, "drugName", e.target.value)}
+                                placeholder="Allergen / Drug Name"
+                                className="w-full font-bold text-slate-900 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 focus:border-rose-500 focus:outline-none"
+                              />
+                              <div className="flex items-center gap-2 text-[11px]">
+                                <input
+                                  type="text"
+                                  value={item.reactionType}
+                                  onChange={(e) => updateItemField("allergies", item.id, "reactionType", e.target.value)}
+                                  placeholder="Reaction (e.g. Hives, Anaphylaxis)"
+                                  className="flex-1 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                />
+                                <input
+                                  type="text"
+                                  value={item.reactionYear}
+                                  onChange={(e) => updateItemField("allergies", item.id, "reactionYear", e.target.value)}
+                                  placeholder="Year"
+                                  className="w-20 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                />
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => deleteItem("allergies", item.id)}
+                              className="text-slate-400 hover:text-rose-600 p-1 rounded-md"
+                              title="Delete item"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 5. DIAGNOSTIC PROCEDURES */}
+                {(pdfReviewTab === "all" || pdfReviewTab === "procedures") && (
+                  <div className="p-4 rounded-2xl bg-sky-50/40 dark:bg-slate-800/70 border border-sky-200 dark:border-sky-900/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <FileSearch className="w-4 h-4 text-sky-600" />
+                        <h4 className="text-xs font-bold text-sky-950 dark:text-sky-200 uppercase tracking-wider">
+                          Procedures & Imaging ({extractedReview.procedures.filter((p) => p._selected).length}/
+                          {extractedReview.procedures.length})
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleCategorySelection("procedures", true)}
+                          className="text-[11px] font-bold text-sky-700 dark:text-sky-400 hover:underline"
+                        >
+                          Check All
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleCategorySelection("procedures", false)}
+                          className="text-[11px] font-bold text-slate-500 hover:underline"
+                        >
+                          Uncheck All
+                        </button>
+                      </div>
+                    </div>
+
+                    {extractedReview.procedures.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic py-2">No diagnostic procedures or studies detected.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        {extractedReview.procedures.map((item) => (
+                          <div
+                            key={item.id}
+                            className={`p-3 rounded-xl border transition-all text-xs flex items-start gap-2.5 ${
+                              item._selected
+                                ? "bg-white dark:bg-slate-900 border-sky-200 dark:border-sky-900/80 shadow-xs"
+                                : "bg-slate-50/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={item._selected}
+                              onChange={() => toggleItemSelection("procedures", item.id)}
+                              className="mt-1 w-4 h-4 rounded text-sky-600 focus:ring-sky-500 cursor-pointer"
+                            />
+                            <div className="flex-1 space-y-1.5">
+                              <input
+                                type="text"
+                                value={item.procedureName}
+                                onChange={(e) => updateItemField("procedures", item.id, "procedureName", e.target.value)}
+                                placeholder="Procedure Name"
+                                className="w-full font-bold text-slate-900 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 focus:border-sky-500 focus:outline-none"
+                              />
+                              <div className="flex items-center gap-2 text-[11px]">
+                                <input
+                                  type="text"
+                                  value={item.datePerformed}
+                                  onChange={(e) => updateItemField("procedures", item.id, "datePerformed", e.target.value)}
+                                  placeholder="Date Performed"
+                                  className="w-28 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                />
+                                <input
+                                  type="text"
+                                  value={item.findings}
+                                  onChange={(e) => updateItemField("procedures", item.id, "findings", e.target.value)}
+                                  placeholder="Findings / Results"
+                                  className="flex-1 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                />
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => deleteItem("procedures", item.id)}
+                              className="text-slate-400 hover:text-rose-600 p-1 rounded-md"
+                              title="Delete item"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
+
+                {/* 6. VACCINATIONS */}
+                {(pdfReviewTab === "all" || pdfReviewTab === "vaccinations") && (
+                  <div className="p-4 rounded-2xl bg-emerald-50/40 dark:bg-slate-800/70 border border-emerald-200 dark:border-emerald-900/60 space-y-3">
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center gap-2">
+                        <Syringe className="w-4 h-4 text-emerald-600" />
+                        <h4 className="text-xs font-bold text-emerald-950 dark:text-emerald-200 uppercase tracking-wider">
+                          Immunizations & Vaccines ({extractedReview.vaccinations.filter((v) => v._selected).length}/
+                          {extractedReview.vaccinations.length})
+                        </h4>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <button
+                          type="button"
+                          onClick={() => toggleCategorySelection("vaccinations", true)}
+                          className="text-[11px] font-bold text-emerald-700 dark:text-emerald-400 hover:underline"
+                        >
+                          Check All
+                        </button>
+                        <span className="text-slate-300">|</span>
+                        <button
+                          type="button"
+                          onClick={() => toggleCategorySelection("vaccinations", false)}
+                          className="text-[11px] font-bold text-slate-500 hover:underline"
+                        >
+                          Uncheck All
+                        </button>
+                      </div>
+                    </div>
+
+                    {extractedReview.vaccinations.length === 0 ? (
+                      <p className="text-xs text-slate-400 italic py-2">No vaccination records detected in document.</p>
+                    ) : (
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5">
+                        {extractedReview.vaccinations.map((item) => (
+                          <div
+                            key={item.id}
+                            className={`p-3 rounded-xl border transition-all text-xs flex items-start gap-2.5 ${
+                              item._selected
+                                ? "bg-white dark:bg-slate-900 border-emerald-200 dark:border-emerald-900/80 shadow-xs"
+                                : "bg-slate-50/60 dark:bg-slate-900/40 border-slate-200 dark:border-slate-800 opacity-60"
+                            }`}
+                          >
+                            <input
+                              type="checkbox"
+                              checked={item._selected}
+                              onChange={() => toggleItemSelection("vaccinations", item.id)}
+                              className="mt-1 w-4 h-4 rounded text-emerald-600 focus:ring-emerald-500 cursor-pointer"
+                            />
+                            <div className="flex-1 space-y-1.5">
+                              <input
+                                type="text"
+                                value={item.vaccineName}
+                                onChange={(e) => updateItemField("vaccinations", item.id, "vaccineName", e.target.value)}
+                                placeholder="Vaccine Name"
+                                className="w-full font-bold text-slate-900 dark:text-white bg-transparent border-b border-transparent hover:border-slate-300 focus:border-emerald-500 focus:outline-none"
+                              />
+                              <div className="flex items-center gap-2 text-[11px]">
+                                <input
+                                  type="text"
+                                  value={item.dateAdministered}
+                                  onChange={(e) => updateItemField("vaccinations", item.id, "dateAdministered", e.target.value)}
+                                  placeholder="Date Administered"
+                                  className="w-28 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                />
+                                <input
+                                  type="text"
+                                  value={item.lotNumber}
+                                  onChange={(e) => updateItemField("vaccinations", item.id, "lotNumber", e.target.value)}
+                                  placeholder="Lot Number"
+                                  className="flex-1 px-1.5 py-0.5 rounded border border-slate-200 dark:border-slate-700 bg-slate-50 dark:bg-slate-800 text-slate-700 dark:text-slate-300"
+                                />
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => deleteItem("vaccinations", item.id)}
+                              className="text-slate-400 hover:text-rose-600 p-1 rounded-md"
+                              title="Delete item"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                )}
               </div>
             </div>
           )}
@@ -4098,26 +4940,50 @@ export function PatientOnboardingModal({
             </div>
           ) : (
             /* PDF Mode Footer */
-            <div className="flex items-center justify-between w-full">
-              <button
-                type="button"
-                onClick={() => setViewMode("choice")}
-                className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:underline"
-              >
-                Cancel
-              </button>
+            viewMode === "pdf_review" ? (
+              <div className="flex flex-col sm:flex-row items-center justify-between w-full gap-3">
+                <div className="flex items-center gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setViewMode("pdf_upload")}
+                    className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:underline"
+                  >
+                    Back to Upload
+                  </button>
+                  <span className="text-slate-300 dark:text-slate-700 hidden sm:inline">•</span>
+                  <span className="text-xs text-slate-500 dark:text-slate-400 hidden sm:inline">
+                    <strong>
+                      {extractedReview.conditions.filter((c) => c._selected).length +
+                        extractedReview.surgeries.filter((s) => s._selected).length +
+                        extractedReview.medications.filter((m) => m._selected).length +
+                        extractedReview.allergies.filter((a) => a._selected).length +
+                        extractedReview.procedures.filter((p) => p._selected).length +
+                        extractedReview.vaccinations.filter((v) => v._selected).length}
+                    </strong>{" "}
+                    items selected for 3D avatar calibration
+                  </span>
+                </div>
 
-              {viewMode === "pdf_review" && (
                 <button
                   type="button"
                   onClick={handleFinishPdfImport}
-                  className="flex items-center gap-2 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold px-6 py-2 rounded-xl shadow-lg transition-all hover:scale-102"
+                  className="flex items-center gap-2 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold px-6 py-2 rounded-xl shadow-lg transition-all hover:scale-102 cursor-pointer"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>Confirm & Save to Health Avatar</span>
                 </button>
-              )}
-            </div>
+              </div>
+            ) : (
+              <div className="flex items-center justify-between w-full">
+                <button
+                  type="button"
+                  onClick={() => setViewMode("choice")}
+                  className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:underline"
+                >
+                  Cancel
+                </button>
+              </div>
+            )
           )}
         </div>
       </div>
