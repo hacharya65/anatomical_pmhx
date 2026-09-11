@@ -52,6 +52,14 @@ export function usePatientData() {
   const [syncStatus, setSyncStatus] = useState("local"); // 'local' | 'synced' | 'syncing' | 'error'
   const [isNewPatient, setIsNewPatient] = useState(false);
 
+  const userRef = useRef(user);
+  useEffect(() => {
+    userRef.current = user;
+  }, [user]);
+
+  const isFetchingRef = useRef(false);
+  const lastFetchedUserIdRef = useRef(null);
+
   // Initialize state: defaults to fresh Elena Vance demo for unauthenticated / demo mode.
   // We explicitly do NOT read mutated guest data from localStorage so that refreshing
   // resets the demo patient back to pristine Elena Vance.
@@ -80,6 +88,9 @@ export function usePatientData() {
 
   // Remote data fetcher: queries Supabase and isolates user data
   const fetchRemoteData = useCallback(async (userId, currentUser) => {
+    if (!userId) return;
+    if (isFetchingRef.current) return;
+    isFetchingRef.current = true;
     setSyncStatus("syncing");
     try {
       const queriesPromise = Promise.allSettled([
@@ -211,7 +222,7 @@ export function usePatientData() {
         : [];
 
       // Profile: Build isolated profile for the user
-      const defaultUser = currentUser || user;
+      const defaultUser = currentUser || userRef.current;
       const baseBlank = createDefaultBlankPatient(defaultUser).profile;
 
       const ecFirstName = profileData?.emergency_contact_first_name || (profileData?.emergency_contact_name ? profileData.emergency_contact_name.split(" ")[0] : "");
@@ -282,12 +293,15 @@ export function usePatientData() {
       try {
         localStorage.setItem(getUserStorageKey(userId), JSON.stringify(nextPatientData));
       } catch (_) {}
+      lastFetchedUserIdRef.current = userId;
       setSyncStatus("synced");
     } catch (e) {
       console.error("Remote data fetch failed:", e);
       setSyncStatus("error");
+    } finally {
+      isFetchingRef.current = false;
     }
-  }, [user]);
+  }, []);
 
   // Auth listener & remote data fetcher
   useEffect(() => {
@@ -357,19 +371,27 @@ export function usePatientData() {
     const { data: { subscription } } = supabase.auth.onAuthStateChange(async (event, session) => {
       if (!mounted) return;
       if (session?.user) {
+        const isDifferentUser = session.user.id !== lastFetchedUserIdRef.current;
         setUser(session.user);
-        try {
-          const cached = localStorage.getItem(getUserStorageKey(session.user.id));
-          if (cached) {
-            setPatientData(JSON.parse(cached));
-          } else {
-            setPatientData(createDefaultBlankPatient(session.user));
-          }
-        } catch (_) {}
-        if (mounted) setAuthLoading(false);
-        fetchRemoteData(session.user.id, session.user);
+        userRef.current = session.user;
+        if (isDifferentUser) {
+          try {
+            const cached = localStorage.getItem(getUserStorageKey(session.user.id));
+            if (cached) {
+              setPatientData(JSON.parse(cached));
+            } else {
+              setPatientData(createDefaultBlankPatient(session.user));
+            }
+          } catch (_) {}
+          if (mounted) setAuthLoading(false);
+          fetchRemoteData(session.user.id, session.user);
+        } else {
+          if (mounted) setAuthLoading(false);
+        }
       } else {
+        lastFetchedUserIdRef.current = null;
         setUser(null);
+        userRef.current = null;
         setSyncStatus("local");
         setIsNewPatient(false);
         // Reset state to clean guest demo record on sign out
@@ -392,7 +414,7 @@ export function usePatientData() {
       clearTimeout(watchdogTimer);
       subscription?.unsubscribe();
     };
-  }, [fetchRemoteData]);
+  }, []);
 
   // Sync current profile to Supabase
   const syncToRemote = useCallback(async (updatedData) => {

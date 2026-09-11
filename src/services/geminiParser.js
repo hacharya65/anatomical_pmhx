@@ -233,36 +233,51 @@ export async function extractMedicalRecordFromPdf(file) {
 
   let rawResponseText = null;
 
-  try {
-    // Primary invocation strictly pinned to gemini-1.5-flash
-    const response = await ai.models.generateContent({
-      model: GEMINI_MODEL,
-      contents: requestContents,
-      config: requestConfig
-    });
+  const candidateModels = [
+    GEMINI_MODEL, // Primary: "gemini-1.5-flash"
+    "gemini-3.7-flash",
+    "gemini-3.5-flash-lite",
+    "gemini-3.8-flash",
+    "gemini-flash-latest"
+  ];
 
-    rawResponseText = response.text;
-  } catch (err) {
-    console.warn(`Initial call to ${GEMINI_MODEL} encountered:`, err.message);
+  let lastError = null;
 
-    // If gemini-1.5-flash returns 404 (endpoint sunset / version deprecation in environment),
-    // gracefully route to the Google GA flash tier (gemini-3.5-flash / gemini-flash-latest)
-    // so user operations are never blocked.
-    if (err.message && (err.message.includes("404") || err.message.includes("not found") || err.message.includes("is no longer available"))) {
-      console.info("Rerouting to active Flash model endpoint...");
-      const fallbackResponse = await ai.models.generateContent({
-        model: "gemini-3.5-flash",
+  for (let i = 0; i < candidateModels.length; i++) {
+    const currentModel = candidateModels[i];
+    try {
+      const response = await ai.models.generateContent({
+        model: currentModel,
         contents: requestContents,
         config: requestConfig
       });
-      rawResponseText = fallbackResponse.text;
-    } else {
-      throw err;
+      if (response && response.text) {
+        rawResponseText = response.text;
+        break;
+      }
+    } catch (err) {
+      lastError = err;
+      console.warn(`Extraction attempt with ${currentModel} returned:`, err?.message || err);
+      // If 404 (model sunset / deprecated) or 503 (high demand) or network stall, try next active model in cascade
+      const isRecoverable =
+        err?.message?.includes("404") ||
+        err?.message?.includes("not found") ||
+        err?.message?.includes("no longer available") ||
+        err?.message?.includes("503") ||
+        err?.message?.includes("high demand") ||
+        err?.message?.includes("Failed to fetch") ||
+        err?.status === 404 ||
+        err?.status === 503;
+
+      if (!isRecoverable && i === 0) {
+        continue;
+      }
     }
   }
 
   if (!rawResponseText) {
-    throw new Error("Empty response received from Gemini clinical extraction model.");
+    const errMsg = lastError?.message || "Failed to communicate with Google Gen AI extraction service.";
+    throw new Error(errMsg);
   }
 
   try {
