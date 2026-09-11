@@ -47,7 +47,8 @@ export default function App() {
     addVaccination,
     updateVaccination,
     deleteVaccination,
-    batchCommitOnboardingData
+    batchCommitOnboardingData,
+    resetToDefault
   } = usePatientData();
 
   // Navigation & 3D interaction state
@@ -74,6 +75,7 @@ export default function App() {
   const handleSignOut = async () => {
     localStorage.removeItem("pmhx_demo_mode");
     setIsDemoMode(false);
+    resetToDefault();
     if (user) {
       await supabase.auth.signOut();
     }

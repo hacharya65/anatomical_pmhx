@@ -1,11 +1,53 @@
-import React from "react";
-import { X, Scissors, Activity, MapPin, Calendar, User, Building, Store, CheckCircle2, Clock } from "lucide-react";
+import React, { useState, useEffect } from "react";
+import {
+  X,
+  Scissors,
+  Activity,
+  MapPin,
+  Calendar,
+  User,
+  Building,
+  Store,
+  BookOpen,
+  ExternalLink,
+  ShieldCheck
+} from "lucide-react";
+import { getConditionEducation } from "../../services/medline.js";
 
 export function InspectionDrawer({
   focusedItem,
   onClose,
   onEdit
 }) {
+  const [education, setEducation] = useState(null);
+  const [loadingEdu, setLoadingEdu] = useState(false);
+
+  useEffect(() => {
+    let isMounted = true;
+    if (focusedItem && !focusedItem.dosage && !focusedItem.incision) {
+      setLoadingEdu(true);
+      setEducation(null);
+      getConditionEducation(focusedItem.icd10 || "", focusedItem.name || "")
+        .then((res) => {
+          if (isMounted) {
+            setEducation(res);
+            setLoadingEdu(false);
+          }
+        })
+        .catch(() => {
+          if (isMounted) {
+            setLoadingEdu(false);
+          }
+        });
+    } else {
+      setEducation(null);
+      setLoadingEdu(false);
+    }
+    return () => {
+      isMounted = false;
+    };
+  }, [focusedItem]);
+
   if (!focusedItem) return null;
 
   const isMedication = focusedItem.itemType === "medication" || !!focusedItem.dosage;
@@ -81,6 +123,64 @@ export function InspectionDrawer({
             </div>
           )}
         </div>
+
+        {/* Authoritative MedlinePlus Clinical Education Card */}
+        {!isMedication && !isSurgery && (loadingEdu || education) && (
+          <div className="p-3.5 rounded-xl border bg-gradient-to-br from-teal-50/70 to-slate-50 border-teal-200/80 shadow-2xs space-y-2.5">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-xs font-bold text-teal-900">
+                <BookOpen className="w-3.5 h-3.5 text-teal-700" />
+                <span>NIH MedlinePlus Overview</span>
+              </div>
+              <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-teal-100/80 text-teal-800 border border-teal-300/60 flex items-center gap-1">
+                <ShieldCheck className="w-3 h-3 text-teal-700" />
+                Verified Clinical Source
+              </span>
+            </div>
+
+            {loadingEdu ? (
+              <div className="space-y-2 py-2 animate-pulse">
+                <div className="h-3.5 bg-teal-200/50 rounded w-3/4"></div>
+                <div className="h-3 bg-slate-200 rounded w-full"></div>
+                <div className="h-3 bg-slate-200 rounded w-5/6"></div>
+              </div>
+            ) : education ? (
+              <div className="space-y-2">
+                <div className="text-xs font-bold text-slate-900">
+                  {education.title}
+                </div>
+
+                {education.keyPoints && education.keyPoints.length > 0 && (
+                  <ul className="space-y-1.5 text-xs text-slate-700">
+                    {education.keyPoints.map((pt, idx) => (
+                      <li key={idx} className="flex items-start gap-1.5 leading-relaxed">
+                        <span className="w-1.5 h-1.5 rounded-full bg-teal-600 shrink-0 mt-1.5" />
+                        <span>{pt}</span>
+                      </li>
+                    ))}
+                  </ul>
+                )}
+
+                <div className="pt-1.5 border-t border-teal-100 flex items-center justify-between text-[11px]">
+                  <span className="text-slate-500 font-medium">
+                    National Library of Medicine
+                  </span>
+                  {education.sourceUrl && (
+                    <a
+                      href={education.sourceUrl}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      className="inline-flex items-center gap-1 text-teal-700 hover:text-teal-900 font-bold hover:underline"
+                    >
+                      <span>Read Patient Guide</span>
+                      <ExternalLink className="w-3 h-3" />
+                    </a>
+                  )}
+                </div>
+              </div>
+            ) : null}
+          </div>
+        )}
 
         {/* Surgical Incision Details */}
         {isSurgery && focusedItem.incision && (

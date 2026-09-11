@@ -36,26 +36,46 @@ export function DemographicModal({
 
   // Helper: parse structured emergency contact
   const parseEmergencyContact = () => {
-    const raw = profile.emergencyContact || "Eli Vance (Spouse) • (555) 234-9812";
-    if (profile.emergencyContactName && profile.emergencyContactPhone) {
+    if (profile.emergencyContactFirstName || profile.emergencyContactLastName) {
+      const fn = profile.emergencyContactFirstName || "";
+      const ln = profile.emergencyContactLastName || "";
       return {
-        name: profile.emergencyContactName,
+        firstName: fn,
+        lastName: ln,
+        name: `${fn} ${ln}`.trim(),
         relation: profile.emergencyContactRelation || "Spouse",
-        phone: profile.emergencyContactPhone
+        phone: profile.emergencyContactPhone || ""
       };
     }
+    if (profile.emergencyContactName) {
+      const parts = profile.emergencyContactName.trim().split(" ");
+      return {
+        firstName: parts[0] || "",
+        lastName: parts.slice(1).join(" ") || "",
+        name: profile.emergencyContactName,
+        relation: profile.emergencyContactRelation || "Spouse",
+        phone: profile.emergencyContactPhone || ""
+      };
+    }
+    const raw = profile.emergencyContact || "";
     const match = raw.match(/^([^(]+?)\s*(?:\(([^)]+)\))?\s*[-•–]\s*(.+)$/);
     if (match) {
+      const fullName = match[1]?.trim() || "";
+      const parts = fullName.split(" ");
       return {
-        name: match[1]?.trim() || "Eli Vance",
+        firstName: parts[0] || "",
+        lastName: parts.slice(1).join(" ") || "",
+        name: fullName,
         relation: match[2]?.trim() || "Spouse",
-        phone: match[3]?.trim() || "(555) 234-9812"
+        phone: match[3]?.trim() || ""
       };
     }
     return {
-      name: "Eli Vance",
+      firstName: "",
+      lastName: "",
+      name: "",
       relation: "Spouse",
-      phone: "(555) 234-9812"
+      phone: ""
     };
   };
 
@@ -77,42 +97,75 @@ export function DemographicModal({
 
   // Demographics form draft
   const [demoDraft, setDemoDraft] = useState({
-    name: profile.name || "Elena Vance",
-    dob: profile.dob || "1968-04-12",
-    age: profile.age || 58,
+    name: profile.name || "",
+    dob: profile.dob || "",
+    age: profile.age || "",
     genderCategory: initialGender.category,
     genderCustom: initialGender.custom,
-    mrn: profile.mrn || "#PMHX-84920",
-    phone: profile.phone || "(555) 839-2041",
-    email: profile.email || "elena.vance@healthmail.net",
-    address: profile.address || "742 Evergreen Terrace, Boston, MA 02115",
+    mrn: profile.mrn || "",
+    phone: profile.phone || "",
+    email: profile.email || "",
+    address: profile.address || "",
     veteranStatus: isInitialVeteran ? "Yes" : "No",
     preferredLanguage: profile.preferredLanguage || "English",
-    bloodType: profile.bloodType || "O Positive"
+    bloodType: profile.bloodType || "I don't know"
   });
 
   // Care Team form draft
   const [careDraft, setCareDraft] = useState({
-    pcp: (profile.pcp || "Dr. Robert Adams, MD").replace(/\s*\(Internal Medicine\)/gi, "").trim(),
-    pcpPhone: profile.pcpPhone || "(555) 726-3000",
-    clinic: (profile.clinic || "Mass General Brigham Associates, Suite 400").replace(/\s*Internal Medicine\s*/gi, " "),
+    pcp: (profile.pcp || "").replace(/\s*\(Internal Medicine\)/gi, "").trim(),
+    pcpPhone: profile.pcpPhone || "",
+    clinic: (profile.clinic || "").replace(/\s*Internal Medicine\s*/gi, " "),
+    emergencyContactFirstName: initialEC.firstName,
+    emergencyContactLastName: initialEC.lastName,
     emergencyContactName: initialEC.name,
     emergencyContactRelation: initialEC.relation,
     emergencyContactPhone: initialEC.phone
   });
 
   // Pharmacy form draft
-  const defaultPharmacy = {
-    name: "CVS Pharmacy #04821",
-    address: "1244 Massachusetts Ave, Cambridge, MA 02138",
-    phone: "(617) 555-0198",
-    fax: "(617) 555-0199",
-    hours: "Open 24 Hours • 7 Days/Week",
-    npi: "1487920114",
-    ncpdp: "2210492",
-    status: "Primary Preferred (E-Prescribe Enabled)"
-  };
-  const [pharmacyDraft, setPharmacyDraft] = useState(profile.pharmacy || defaultPharmacy);
+  const [pharmacyDraft, setPharmacyDraft] = useState(profile.pharmacy || null);
+
+  // Sync draft states when profile changes or modal opens
+  useEffect(() => {
+    if (isOpen) {
+      const g = parseGenderState();
+      const ec = parseEmergencyContact();
+      const isVet =
+        profile.veteranStatus === "Yes" ||
+        profile.veteranStatus === "yes" ||
+        (typeof profile.veteranStatus === "string" &&
+          profile.veteranStatus.toLowerCase().includes("veteran"));
+
+      setDemoDraft({
+        name: profile.name || "",
+        dob: profile.dob || "",
+        age: profile.age || "",
+        genderCategory: g.category,
+        genderCustom: g.custom,
+        mrn: profile.mrn || "",
+        phone: profile.phone || "",
+        email: profile.email || "",
+        address: profile.address || "",
+        veteranStatus: isVet ? "Yes" : "No",
+        preferredLanguage: profile.preferredLanguage || "English",
+        bloodType: profile.bloodType || "I don't know"
+      });
+
+      setCareDraft({
+        pcp: (profile.pcp || "").replace(/\s*\(Internal Medicine\)/gi, "").trim(),
+        pcpPhone: profile.pcpPhone || "",
+        clinic: (profile.clinic || "").replace(/\s*Internal Medicine\s*/gi, " "),
+        emergencyContactFirstName: ec.firstName,
+        emergencyContactLastName: ec.lastName,
+        emergencyContactName: ec.name,
+        emergencyContactRelation: ec.relation,
+        emergencyContactPhone: ec.phone
+      });
+
+      setPharmacyDraft(profile.pharmacy || null);
+    }
+  }, [isOpen, profile]);
 
   // New / Edit allergy modal state
   const [allergyDraft, setAllergyDraft] = useState(null);
@@ -168,13 +221,20 @@ export function DemographicModal({
 
   const handleSaveCareTeam = (e) => {
     e.preventDefault();
-    const formattedContact = `${careDraft.emergencyContactName || "Eli Vance"} (${careDraft.emergencyContactRelation || "Spouse"}) • ${careDraft.emergencyContactPhone || "(555) 234-9812"}`;
+    const ecFirstName = careDraft.emergencyContactFirstName?.trim() || "";
+    const ecLastName = careDraft.emergencyContactLastName?.trim() || "";
+    const ecFullName = `${ecFirstName} ${ecLastName}`.trim() || careDraft.emergencyContactName?.trim() || "";
+    const formattedContact = ecFullName
+      ? `${ecFullName} (${careDraft.emergencyContactRelation || "Spouse"}) • ${careDraft.emergencyContactPhone?.trim() || ""}`
+      : "";
     onSaveProfile({
       ...profile,
       pcp: careDraft.pcp.replace(/\s*\(Internal Medicine\)/gi, "").trim(),
       pcpPhone: careDraft.pcpPhone,
       clinic: careDraft.clinic,
-      emergencyContactName: careDraft.emergencyContactName,
+      emergencyContactFirstName: ecFirstName,
+      emergencyContactLastName: ecLastName,
+      emergencyContactName: ecFullName,
       emergencyContactRelation: careDraft.emergencyContactRelation,
       emergencyContactPhone: careDraft.emergencyContactPhone,
       emergencyContact: formattedContact
@@ -233,10 +293,10 @@ export function DemographicModal({
             <div>
               <div className="flex items-center gap-2">
                 <h2 className="text-lg font-bold tracking-tight leading-tight">
-                  {profile.name || "Elena Vance"}
+                  {profile.name || "Patient"}
                 </h2>
                 <span className="text-xs font-mono px-2 py-0.5 rounded border bg-slate-100 dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-600 dark:text-slate-300">
-                  {profile.mrn || "#PMHX-84920"}
+                  {profile.mrn || "#PT-RECORD"}
                 </span>
                 <span className="text-xs px-2 py-0.5 rounded-full font-semibold bg-emerald-100 text-emerald-800 dark:bg-emerald-950/60 dark:text-emerald-300 border border-emerald-300 dark:border-emerald-800">
                   Active EMR Record
@@ -289,18 +349,18 @@ export function DemographicModal({
                       (typeof profile.veteranStatus === "string" &&
                         profile.veteranStatus.toLowerCase().includes("veteran"));
                     setDemoDraft({
-                      name: profile.name || "Elena Vance",
-                      dob: profile.dob || "1968-04-12",
-                      age: profile.age || 58,
+                      name: profile.name || "",
+                      dob: profile.dob || "",
+                      age: profile.age || "",
                       genderCategory: gState.category,
                       genderCustom: gState.custom,
-                      mrn: profile.mrn || "#PMHX-84920",
-                      phone: profile.phone || "(555) 839-2041",
-                      email: profile.email || "elena.vance@healthmail.net",
-                      address: profile.address || "742 Evergreen Terrace, Boston, MA 02115",
+                      mrn: profile.mrn || "",
+                      phone: profile.phone || "",
+                      email: profile.email || "",
+                      address: profile.address || "",
                       veteranStatus: isVet ? "Yes" : "No",
                       preferredLanguage: profile.preferredLanguage || "English",
-                      bloodType: profile.bloodType || "O Positive"
+                      bloodType: profile.bloodType || "I don't know"
                     });
                     setEditingSection("demographics");
                   }}
@@ -480,7 +540,7 @@ export function DemographicModal({
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Primary Phone</span>
                   <div className="flex items-center gap-1.5 font-medium mt-0.5">
                     <Phone className="w-3.5 h-3.5 text-teal-600" />
-                    <span>{profile.phone || "(555) 839-2041"}</span>
+                    <span className={!profile.phone ? "text-slate-400 italic" : ""}>{profile.phone || "Not provided"}</span>
                   </div>
                 </div>
 
@@ -488,7 +548,7 @@ export function DemographicModal({
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Email Address</span>
                   <div className="flex items-center gap-1.5 font-medium mt-0.5 truncate">
                     <Mail className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                    <span className="truncate">{profile.email || "elena.vance@healthmail.net"}</span>
+                    <span className={`truncate ${!profile.email ? "text-slate-400 italic" : ""}`}>{profile.email || "Not provided"}</span>
                   </div>
                 </div>
 
@@ -514,14 +574,14 @@ export function DemographicModal({
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Home / Mailing Address</span>
                   <div className="flex items-center gap-1.5 font-medium mt-0.5">
                     <MapPin className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                    <span>{profile.address || "742 Evergreen Terrace, Boston, MA 02115"}</span>
+                    <span className={!profile.address ? "text-slate-400 italic" : ""}>{profile.address || "Not provided"}</span>
                   </div>
                 </div>
 
                 <div>
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Language / Blood Type</span>
                   <div className="font-medium mt-0.5">
-                    {profile.preferredLanguage || "English"} • {profile.bloodType || "O Positive"}
+                    {profile.preferredLanguage || "English"} • {profile.bloodType || "I don't know"}
                   </div>
                 </div>
               </div>
@@ -726,9 +786,11 @@ export function DemographicModal({
                   onClick={() => {
                     const ec = parseEmergencyContact();
                     setCareDraft({
-                      pcp: (profile.pcp || "Dr. Robert Adams, MD").replace(/\s*\(Internal Medicine\)/gi, "").trim(),
-                      pcpPhone: profile.pcpPhone || "(555) 726-3000",
-                      clinic: (profile.clinic || "Mass General Brigham Associates, Suite 400").replace(/\s*Internal Medicine\s*/gi, " "),
+                      pcp: (profile.pcp || "").replace(/\s*\(Internal Medicine\)/gi, "").trim(),
+                      pcpPhone: profile.pcpPhone || "",
+                      clinic: (profile.clinic || "").replace(/\s*Internal Medicine\s*/gi, " "),
+                      emergencyContactFirstName: profile.emergencyContactFirstName || ec.firstName,
+                      emergencyContactLastName: profile.emergencyContactLastName || ec.lastName,
                       emergencyContactName: profile.emergencyContactName || ec.name,
                       emergencyContactRelation: profile.emergencyContactRelation || ec.relation,
                       emergencyContactPhone: profile.emergencyContactPhone || ec.phone
@@ -760,7 +822,6 @@ export function DemographicModal({
                       className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
                         isLight ? "bg-white border-slate-300 text-slate-900 focus:border-teal-600" : "bg-slate-900 border-slate-700 text-slate-100"
                       }`}
-                      required
                     />
                   </div>
 
@@ -790,23 +851,35 @@ export function DemographicModal({
                     />
                   </div>
 
-                  {/* Structured Emergency Contact Inputs */}
+                  {/* Structured Emergency Contact Inputs - Split into First and Last Name */}
                   <div className="sm:col-span-2 pt-2 border-t border-slate-200 dark:border-slate-800">
                     <label className="block font-bold text-slate-800 dark:text-slate-200 mb-2">
                       Emergency Contact Person & Relation
                     </label>
-                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                    <div className="grid grid-cols-1 sm:grid-cols-4 gap-3">
                       <div>
-                        <label className="block font-medium mb-1 text-slate-600 dark:text-slate-400">Contact Full Name</label>
+                        <label className="block font-medium mb-1 text-slate-600 dark:text-slate-400">First Name</label>
                         <input
                           type="text"
-                          value={careDraft.emergencyContactName}
-                          onChange={(e) => setCareDraft({ ...careDraft, emergencyContactName: e.target.value })}
-                          placeholder="e.g. Eli Vance"
+                          value={careDraft.emergencyContactFirstName || ""}
+                          onChange={(e) => setCareDraft({ ...careDraft, emergencyContactFirstName: e.target.value })}
+                          placeholder="e.g. David"
                           className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
                             isLight ? "bg-white border-slate-300 text-slate-900 focus:border-teal-600" : "bg-slate-900 border-slate-700 text-slate-100"
                           }`}
-                          required
+                        />
+                      </div>
+
+                      <div>
+                        <label className="block font-medium mb-1 text-slate-600 dark:text-slate-400">Last Name</label>
+                        <input
+                          type="text"
+                          value={careDraft.emergencyContactLastName || ""}
+                          onChange={(e) => setCareDraft({ ...careDraft, emergencyContactLastName: e.target.value })}
+                          placeholder="e.g. Vance"
+                          className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
+                            isLight ? "bg-white border-slate-300 text-slate-900 focus:border-teal-600" : "bg-slate-900 border-slate-700 text-slate-100"
+                          }`}
                         />
                       </div>
 
@@ -842,7 +915,6 @@ export function DemographicModal({
                           className={`w-full p-2 rounded-lg border text-xs focus:outline-none ${
                             isLight ? "bg-white border-slate-300 text-slate-900 focus:border-teal-600" : "bg-slate-900 border-slate-700 text-slate-100"
                           }`}
-                          required
                         />
                       </div>
                     </div>
@@ -869,11 +941,11 @@ export function DemographicModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3.5 gap-x-6 text-xs">
                 <div>
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Primary Care Physician</span>
-                  <div className="font-semibold text-slate-800 dark:text-slate-200 mt-0.5">
-                    {profile.pcp ? profile.pcp.replace(/\s*\(Internal Medicine\)/gi, "").trim() : "Dr. Robert Adams, MD"}
+                  <div className={`font-semibold mt-0.5 ${profile.pcp ? "text-slate-800 dark:text-slate-200" : "text-slate-400 italic"}`}>
+                    {profile.pcp ? profile.pcp.replace(/\s*\(Internal Medicine\)/gi, "").trim() : "None assigned"}
                   </div>
                   <div className="text-slate-500 text-[11px] mt-0.5">
-                    Phone: {profile.pcpPhone || "(555) 726-3000"}
+                    Phone: {profile.pcpPhone || "—"}
                   </div>
                 </div>
 
@@ -881,22 +953,30 @@ export function DemographicModal({
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Clinical Facility</span>
                   <div className="flex items-center gap-1.5 font-medium mt-0.5">
                     <Building className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                    <span>{profile.clinic || "Mass General Brigham Associates, Suite 400"}</span>
+                    <span className={!profile.clinic ? "text-slate-400 italic" : ""}>
+                      {profile.clinic ? profile.clinic.replace(/\s*Internal Medicine\s*/gi, " ") : "None listed"}
+                    </span>
                   </div>
                 </div>
 
                 <div className="sm:col-span-2">
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Emergency Contact</span>
-                  <div className="flex items-center gap-2 font-medium mt-0.5 text-slate-800 dark:text-slate-200">
-                    <HeartHandshake className="w-3.5 h-3.5 text-rose-600 shrink-0" />
-                    <span className="font-bold">{profile.emergencyContactName || "Eli Vance"}</span>
-                    <span className="text-[11px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 font-semibold">
-                      {profile.emergencyContactRelation || "Spouse"}
-                    </span>
-                    <span className="text-slate-600 dark:text-slate-400 font-mono">
-                      {profile.emergencyContactPhone || "(555) 234-9812"}
-                    </span>
-                  </div>
+                  {profile.emergencyContact || profile.emergencyContactName || profile.emergencyContactFirstName ? (
+                    <div className="flex items-center gap-2 font-medium mt-0.5 text-slate-800 dark:text-slate-200">
+                      <HeartHandshake className="w-3.5 h-3.5 text-rose-600 shrink-0" />
+                      <span className="font-bold">
+                        {profile.emergencyContactName || [profile.emergencyContactFirstName, profile.emergencyContactLastName].filter(Boolean).join(" ")}
+                      </span>
+                      <span className="text-[11px] px-2 py-0.5 rounded bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300 border border-slate-200 dark:border-slate-700 font-semibold">
+                        {profile.emergencyContactRelation || "Spouse"}
+                      </span>
+                      <span className="text-slate-600 dark:text-slate-400 font-mono">
+                        {profile.emergencyContactPhone || "—"}
+                      </span>
+                    </div>
+                  ) : (
+                    <div className="text-slate-400 italic mt-0.5">None listed</div>
+                  )}
                 </div>
               </div>
             )}
@@ -919,7 +999,14 @@ export function DemographicModal({
                 <button
                   type="button"
                   onClick={() => {
-                    setPharmacyDraft(profile.pharmacy || defaultPharmacy);
+                    setPharmacyDraft(profile.pharmacy || {
+                      name: "",
+                      address: "",
+                      phone: "",
+                      fax: "",
+                      hours: "",
+                      status: "Primary Preferred (E-Prescribe Enabled)"
+                    });
                     setEditingSection("pharmacy");
                   }}
                   className={`flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1 rounded-lg border transition-all ${
@@ -1061,13 +1148,13 @@ export function DemographicModal({
                   </button>
                 </div>
               </form>
-            ) : (
+            ) : pharmacyDraft && pharmacyDraft.name ? (
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-y-3.5 gap-x-6 text-xs">
                 <div>
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Primary Preferred Pharmacy</span>
                   <div className="flex items-center gap-2 mt-0.5">
                     <span className="font-bold text-slate-900 dark:text-slate-100">
-                      {pharmacyDraft.name || "CVS Pharmacy #04821"}
+                      {pharmacyDraft.name}
                     </span>
                     <span className="text-[10px] px-1.5 py-0.2 rounded font-semibold bg-teal-100 text-teal-800 border border-teal-200">
                       E-Prescribe
@@ -1075,7 +1162,7 @@ export function DemographicModal({
                   </div>
                   <div className="text-slate-500 text-[11px] mt-1 flex items-center gap-1">
                     <MapPin className="w-3 h-3 text-slate-400 shrink-0" />
-                    <span>{pharmacyDraft.address || "1244 Massachusetts Ave, Cambridge, MA 02138"}</span>
+                    <span>{pharmacyDraft.address || "Address not provided"}</span>
                   </div>
                 </div>
 
@@ -1083,27 +1170,33 @@ export function DemographicModal({
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Dispensary Contact</span>
                   <div className="text-slate-700 dark:text-slate-300 text-xs font-medium mt-0.5 flex items-center gap-1.5">
                     <Phone className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                    <span>Phone: {pharmacyDraft.phone || "(617) 555-0198"}</span>
+                    <span>Phone: {pharmacyDraft.phone || "—"}</span>
                   </div>
-                  <div className="text-slate-500 text-[11px] mt-0.5 pl-5">
-                    Fax: {pharmacyDraft.fax || "(617) 555-0199"}
-                  </div>
+                  {pharmacyDraft.fax && (
+                    <div className="text-slate-500 text-[11px] mt-0.5 pl-5">
+                      Fax: {pharmacyDraft.fax}
+                    </div>
+                  )}
                 </div>
 
                 <div>
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Hours of Operation</span>
                   <div className="flex items-center gap-1.5 font-medium mt-0.5 text-slate-700 dark:text-slate-300">
                     <Clock className="w-3.5 h-3.5 text-teal-600 shrink-0" />
-                    <span>{pharmacyDraft.hours || "Open 24 Hours • 7 Days/Week"}</span>
+                    <span>{pharmacyDraft.hours || "Standard retail hours"}</span>
                   </div>
                 </div>
 
                 <div>
                   <span className="text-slate-500 dark:text-slate-400 block text-[11px]">Electronic Prescribing Identifiers</span>
                   <div className="font-mono text-[11px] text-slate-600 dark:text-slate-400 mt-0.5">
-                    NCPDP: <strong className="text-slate-800 dark:text-slate-200">{pharmacyDraft.ncpdp || "2210492"}</strong> • NPI: <strong className="text-slate-800 dark:text-slate-200">{pharmacyDraft.npi || "1487920114"}</strong>
+                    NCPDP: <strong className="text-slate-800 dark:text-slate-200">{pharmacyDraft.ncpdp || "—"}</strong> • NPI: <strong className="text-slate-800 dark:text-slate-200">{pharmacyDraft.npi || "—"}</strong>
                   </div>
                 </div>
+              </div>
+            ) : (
+              <div className="p-4 rounded-xl border border-dashed border-slate-200 dark:border-slate-800 text-center text-slate-500 text-xs">
+                No preferred pharmacy documented. Click "Edit Pharmacy" to record your dispensing location.
               </div>
             )}
           </div>

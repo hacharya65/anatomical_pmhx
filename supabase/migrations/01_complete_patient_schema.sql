@@ -1,119 +1,16 @@
-import { createClient } from "@supabase/supabase-js";
-
-// Helper functions to normalize and clean Supabase URL and keys
-export function normalizeSupabaseUrl(rawUrl) {
-  if (!rawUrl || typeof rawUrl !== "string") return "";
-  let clean = rawUrl.trim().replace(/^["']|["']$/g, "").trim();
-
-  // If user pasted dashboard URL: https://supabase.com/dashboard/project/<project-ref>
-  const dashboardMatch = clean.match(/supabase\.com\/dashboard\/project\/([a-z0-9_-]+)/i);
-  if (dashboardMatch && dashboardMatch[1]) {
-    return `https://${dashboardMatch[1]}.supabase.co`;
-  }
-
-  // Ensure protocol
-  if (!clean.startsWith("http://") && !clean.startsWith("https://")) {
-    clean = `https://${clean}`;
-  }
-
-  try {
-    const parsed = new URL(clean);
-    // Project URL must be protocol + host ONLY (e.g. https://xyz.supabase.co)
-    // Strip all pathnames (like /rest/v1, /auth/v1, /graphql, trailing slashes)
-    return `${parsed.protocol}//${parsed.host}`;
-  } catch (e) {
-    // Fallback regex: remove any trailing slashes, /rest/v1, /auth/v1, etc.
-    return clean
-      .replace(/\/rest\/v1.*$/i, "")
-      .replace(/\/auth\/v1.*$/i, "")
-      .replace(/\/graphql.*$/i, "")
-      .replace(/\/+$/, "");
-  }
-}
-
-export function normalizeSupabaseKey(rawKey) {
-  if (!rawKey || typeof rawKey !== "string") return "";
-  return rawKey.trim().replace(/^["']|["']$/g, "").trim();
-}
-
-// Retrieve config from env or localStorage with strict URL sanitization
-const getSavedConfig = () => {
-  try {
-    const customUrl = localStorage.getItem("pmhx_supabase_url");
-    const customKey = localStorage.getItem("pmhx_supabase_anon_key");
-    const rawUrl = customUrl || import.meta.env.VITE_SUPABASE_URL || "https://your-project.supabase.co";
-    const rawKey = customKey || import.meta.env.VITE_SUPABASE_ANON_KEY || "your-anon-key";
-
-    const url = normalizeSupabaseUrl(rawUrl) || "https://your-project.supabase.co";
-    const key = normalizeSupabaseKey(rawKey) || "your-anon-key";
-
-    // Auto-heal localStorage if the saved URL or key had paths or formatting errors
-    if (customUrl && customUrl !== url) {
-      localStorage.setItem("pmhx_supabase_url", url);
-    }
-    if (customKey && customKey !== key) {
-      localStorage.setItem("pmhx_supabase_anon_key", key);
-    }
-
-    return { url, key, isCustom: !!customUrl };
-  } catch (e) {
-    return {
-      url: "https://your-project.supabase.co",
-      key: "your-anon-key",
-      isCustom: false
-    };
-  }
-};
-
-export const isSupabaseConfigured = () => {
-  const { url, key } = getSavedConfig();
-  return (
-    url &&
-    url !== "https://your-project.supabase.co" &&
-    key &&
-    key !== "your-anon-key" &&
-    key.length > 20
-  );
-};
-
-const config = getSavedConfig();
-
-export let supabase = createClient(config.url, config.key, {
-  auth: {
-    persistSession: true,
-    autoRefreshToken: true,
-  }
-});
-
-export const reinitializeSupabase = (url, anonKey) => {
-  if (url && anonKey) {
-    const cleanUrl = normalizeSupabaseUrl(url);
-    const cleanKey = normalizeSupabaseKey(anonKey);
-    localStorage.setItem("pmhx_supabase_url", cleanUrl);
-    localStorage.setItem("pmhx_supabase_anon_key", cleanKey);
-    supabase = createClient(cleanUrl, cleanKey, {
-      auth: {
-        persistSession: true,
-        autoRefreshToken: true,
-      }
-    });
-    return true;
-  }
-  return false;
-};
-
-export const resetSupabaseConfig = () => {
-  try {
-    localStorage.removeItem("pmhx_supabase_url");
-    localStorage.removeItem("pmhx_supabase_anon_key");
-  } catch (_) {}
-  const fallback = getSavedConfig();
-  supabase = createClient(fallback.url, fallback.key);
-};
-
-export const SUPABASE_SQL_SCHEMA = `-- ==============================================================================
+-- ==============================================================================
 -- COMPREHENSIVE SUPABASE SCHEMA MIGRATION FOR ANATOMICAL PMHX
--- Run in your Supabase Project: SQL Editor -> New Query -> Run
+-- File: supabase/migrations/01_complete_patient_schema.sql
+-- 
+-- Instructions:
+-- 1. Open your Supabase Project Dashboard: https://supabase.com/dashboard
+-- 2. Click on "SQL Editor" in the left navigation sidebar.
+-- 3. Click "+ New Query".
+-- 4. Paste this ENTIRE script and click "Run" (or CMD+Enter / CTRL+Enter).
+--
+-- This script is completely IDEMPOTENT: safe to run multiple times.
+-- It ensures all 6 tables exist with resilient TEXT date columns,
+-- TEXT primary keys, CASCADE deletion on auth.users, and strict RLS policies.
 -- ==============================================================================
 
 -- 1. Patient Profile Table
@@ -157,6 +54,7 @@ begin
   end if;
 end $$;
 
+-- Alter dob to text if it was previously created as date
 alter table public.patient_profile alter column dob type text using dob::text;
 alter table public.patient_profile add column if not exists address text;
 alter table public.patient_profile add column if not exists pharmacy jsonb;
@@ -181,6 +79,7 @@ create table if not exists public.patient_conditions (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Ensure onset_date is text to support years (e.g. "2024", "06/2026", "N/A")
 alter table public.patient_conditions alter column onset_date type text using onset_date::text;
 alter table public.patient_conditions add column if not exists facility text;
 alter table public.patient_conditions add column if not exists laterality text;
@@ -201,6 +100,7 @@ create table if not exists public.patient_surgeries (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Ensure surgery_date is text
 alter table public.patient_surgeries alter column surgery_date type text using surgery_date::text;
 
 -- 4. Patient Medications Table
@@ -225,6 +125,7 @@ create table if not exists public.patient_medications (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Ensure start_date is text and dispensing columns exist
 alter table public.patient_medications alter column start_date type text using start_date::text;
 alter table public.patient_medications add column if not exists last_picked_up_date text;
 alter table public.patient_medications add column if not exists last_picked_up_pharmacy text;
@@ -233,7 +134,7 @@ alter table public.patient_medications add column if not exists quantity_amount 
 alter table public.patient_medications add column if not exists refills_remaining int default 0;
 alter table public.patient_medications add column if not exists rx_number text;
 
--- 5. Patient Procedures Table
+-- 5. Patient Procedures Table (Diagnostic studies, endoscopies, imaging, functional tests)
 create table if not exists public.patient_procedures (
   id text primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
@@ -250,10 +151,11 @@ create table if not exists public.patient_procedures (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Ensure id & date_performed are text
 alter table public.patient_procedures alter column id type text using id::text;
 alter table public.patient_procedures alter column date_performed type text using date_performed::text;
 
--- 6. Patient Vaccinations Table
+-- 6. Patient Vaccinations Table (Immunizations, boosters, pediatric & adult vaccines)
 create table if not exists public.patient_vaccinations (
   id text primary key,
   user_id uuid references auth.users(id) on delete cascade not null,
@@ -266,11 +168,14 @@ create table if not exists public.patient_vaccinations (
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );
 
+-- Ensure id & date fields are text
 alter table public.patient_vaccinations alter column id type text using id::text;
 alter table public.patient_vaccinations alter column date_administered type text using date_administered::text;
 alter table public.patient_vaccinations alter column next_due_date type text using next_due_date::text;
 
--- Performance Indexes
+-- ==============================================================================
+-- INDEXES FOR FAST QUERYING
+-- ==============================================================================
 create index if not exists idx_patient_profile_user_id on public.patient_profile(user_id);
 create index if not exists idx_patient_conditions_user_id on public.patient_conditions(user_id);
 create index if not exists idx_patient_surgeries_user_id on public.patient_surgeries(user_id);
@@ -278,7 +183,11 @@ create index if not exists idx_patient_medications_user_id on public.patient_med
 create index if not exists idx_patient_procedures_user_id on public.patient_procedures(user_id);
 create index if not exists idx_patient_vaccinations_user_id on public.patient_vaccinations(user_id);
 
--- Row Level Security (RLS) Policies
+-- ==============================================================================
+-- ROW LEVEL SECURITY (RLS) POLICIES
+-- Ensures each authenticated user can ONLY access and modify their own records.
+-- ==============================================================================
+
 alter table public.patient_profile enable row level security;
 alter table public.patient_conditions enable row level security;
 alter table public.patient_surgeries enable row level security;
@@ -286,23 +195,27 @@ alter table public.patient_medications enable row level security;
 alter table public.patient_procedures enable row level security;
 alter table public.patient_vaccinations enable row level security;
 
--- Drop and recreate RLS policies
+-- Profile RLS
 drop policy if exists "Users can manage own profile" on public.patient_profile;
 create policy "Users can manage own profile" on public.patient_profile
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- Conditions RLS
 drop policy if exists "Users can manage own conditions" on public.patient_conditions;
 create policy "Users can manage own conditions" on public.patient_conditions
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- Surgeries RLS
 drop policy if exists "Users can manage own surgeries" on public.patient_surgeries;
 create policy "Users can manage own surgeries" on public.patient_surgeries
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- Medications RLS
 drop policy if exists "Users can manage own medications" on public.patient_medications;
 create policy "Users can manage own medications" on public.patient_medications
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- Procedures RLS
 drop policy if exists "Users can manage own procedures" on public.patient_procedures;
 drop policy if exists "Users can view their own procedures" on public.patient_procedures;
 drop policy if exists "Users can insert their own procedures" on public.patient_procedures;
@@ -311,6 +224,7 @@ drop policy if exists "Users can delete their own procedures" on public.patient_
 create policy "Users can manage own procedures" on public.patient_procedures
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
 
+-- Vaccinations RLS
 drop policy if exists "Users can manage own vaccinations" on public.patient_vaccinations;
 drop policy if exists "Users can view their own vaccinations" on public.patient_vaccinations;
 drop policy if exists "Users can insert their own vaccinations" on public.patient_vaccinations;
@@ -318,5 +232,3 @@ drop policy if exists "Users can update their own vaccinations" on public.patien
 drop policy if exists "Users can delete their own vaccinations" on public.patient_vaccinations;
 create policy "Users can manage own vaccinations" on public.patient_vaccinations
   for all using (auth.uid() = user_id) with check (auth.uid() = user_id);
-`;
-

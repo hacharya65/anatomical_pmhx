@@ -53,19 +53,19 @@ export function ClinicalSummary({ profile = {}, conditions = [], surgeries = [],
           <div className="grid grid-cols-2 sm:grid-cols-3 gap-3 p-3.5 rounded-lg bg-slate-50 border border-slate-200 text-xs">
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-semibold tracking-wider">Patient Name</span>
-              <strong className="text-slate-900 font-bold">{profile.name || "Elena Vance"}</strong>
+              <strong className="text-slate-900 font-bold">{profile.name || "Patient"}</strong>
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-semibold tracking-wider">DOB / Age</span>
-              <strong className="text-slate-900 font-bold">{profile.dob || "1968-04-12"} ({calculateAge(profile.dob, profile.age || 58)} yo)</strong>
+              <strong className="text-slate-900 font-bold">{profile.dob ? `${profile.dob} (${calculateAge(profile.dob, profile.age || "—")} yo)` : "Not documented"}</strong>
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-semibold tracking-wider">Medical Record #</span>
-              <strong className="text-teal-700 font-mono font-bold">{profile.mrn || "#PMHX-84920"}</strong>
+              <strong className="text-teal-700 font-mono font-bold">{profile.mrn || "N/A"}</strong>
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-semibold tracking-wider">Primary Care Provider</span>
-              <span className="text-slate-800 font-medium">{profile.pcp ? profile.pcp.replace(/\s*\(Internal Medicine\)/gi, "").trim() : "Dr. Robert Adams, MD"}</span>
+              <span className="text-slate-800 font-medium">{profile.pcp ? profile.pcp.replace(/\s*\(Internal Medicine\)/gi, "").trim() : "Unassigned"}</span>
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-semibold tracking-wider">Code / Veteran Status</span>
@@ -80,7 +80,7 @@ export function ClinicalSummary({ profile = {}, conditions = [], surgeries = [],
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-semibold tracking-wider">Emergency Contact</span>
-              <span className="text-slate-800 font-medium">{profile.emergencyContact || "Eli Vance (Spouse) • (555) 234-9812"}</span>
+              <span className="text-slate-800 font-medium">{profile.emergencyContact || "None listed"}</span>
             </div>
           </div>
 
@@ -111,7 +111,7 @@ export function ClinicalSummary({ profile = {}, conditions = [], surgeries = [],
 
           {/* Allergies Banner */}
           <div className="p-3 rounded-lg bg-rose-50 border border-rose-200 text-xs text-rose-900">
-            <strong className="font-bold">⚠️ Documented Allergies:</strong> {profile.allergies || "Penicillin (Severe anaphylaxis, hives)"}
+            <strong className="font-bold">⚠️ Documented Allergies:</strong> {profile.allergies || "No Known Drug Allergies (NKDA)"}
           </div>
 
           {/* Section I: Active Problem List */}

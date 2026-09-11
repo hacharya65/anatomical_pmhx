@@ -64,7 +64,7 @@ export function Header({
           <div className="flex items-center gap-1.5 font-bold">
             <UserCheck className="w-3.5 h-3.5 text-teal-700 shrink-0" />
             <span className="text-slate-900 group-hover:text-teal-800 transition-colors">
-              {profile.name || "Elena Vance"}
+              {profile.name || "Patient"}
             </span>
             <button
               type="button"
@@ -80,8 +80,24 @@ export function Header({
           </div>
           <span className="text-slate-300">|</span>
           <div className="text-slate-600">
-            Age <strong className="text-slate-900 font-bold">{calculateAge(profile.dob, profile.age || 58)}</strong>
+            Age <strong className="text-slate-900 font-bold">{calculateAge(profile.dob, profile.age || "—")}</strong>
           </div>
+          {profile.sex && (
+            <>
+              <span className="text-slate-300">|</span>
+              <div className="text-slate-600 capitalize text-[11px]">
+                {profile.sex}
+              </div>
+            </>
+          )}
+          {profile.bloodType && profile.bloodType !== "I don't know" && (
+            <>
+              <span className="text-slate-300">|</span>
+              <div className="font-semibold text-slate-700 text-[11px]">
+                {profile.bloodType}
+              </div>
+            </>
+          )}
           <span className="text-slate-300">|</span>
           <div className="font-mono text-teal-800 font-medium text-[11px]">{profile.mrn || "#PMHX-84920"}</div>
           {profile.allergies && (

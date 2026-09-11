@@ -131,14 +131,15 @@ export const CLINICAL_CATALOG = {
       notes: "Chronic autoimmune Hashimoto's thyroiditis stabilized on levothyroxine."
     },
     {
-      id: "cond-oa-knee",
-      name: "Osteoarthritis (Right Knee)",
-      plainName: "Right Knee Joint Wear & Tear",
-      region: "Right Knee Joint (Medial Compartment)",
-      icd10: "M17.11",
+      id: "cond-oa",
+      name: "Osteoarthritis",
+      plainName: "Joint Wear & Tear (Osteoarthritis)",
+      region: "Knee Joint",
+      icd10: "M17.9",
       coords: { x: -1.18, y: -4.25, z: 0.8 },
       system: "orthopedic_knee",
-      notes: "Severe degenerative tricompartmental joint disease; status post TKA."
+      hasLaterality: true,
+      notes: "Degenerative joint disease."
     },
     {
       id: "cond-cad",

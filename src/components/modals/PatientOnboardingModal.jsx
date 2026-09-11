@@ -1,4 +1,4 @@
-import React, { useState, useRef, useMemo } from "react";
+import React, { useState, useRef, useMemo, useEffect } from "react";
 import {
   X,
   Sparkles,
@@ -25,11 +25,16 @@ import {
   MapPin,
   Calendar,
   Building2,
+  Building,
+  HeartHandshake,
   Info
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
 import { CLINICAL_CATALOG, calculateAge, MEDICATION_CLINICAL_ASSOCIATIONS } from "../../lib/clinicalCatalog";
+import { searchConditions } from "../../services/ctss.js";
+import { searchMedications, getMedicationStrengths } from "../../services/rxnorm.js";
+import { getStandardVaccines, evaluateVaccineStatus } from "../../services/cdcSchedule.js";
 
 // Configure pdfjs worker client-side
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
@@ -194,26 +199,24 @@ const ALPHABETICAL_COMMON_MEDICATIONS = [
 ].sort();
 
 const COMMON_PROCEDURES = [
-  { name: "Screening Colonoscopy", plainName: "Colonoscopy (Colon Exam)", marker: "Lower Bowel / Colon", type: "diagnostic", recall: 10, findings: "Normal colonic mucosa without polyps or active inflammation." },
-  { name: "Upper Endoscopy (EGD)", plainName: "Stomach Camera Exam (EGD)", marker: "Esophagus / Stomach", type: "diagnostic", recall: 3, findings: "Mild non-erosive erythematous gastropathy; duodenum normal." },
-  { name: "Transthoracic Echocardiogram (TTE)", plainName: "Heart Ultrasound (Echo)", marker: "Heart / Thorax", type: "diagnostic", recall: 1, findings: "Normal LV cavity size, LVEF 55-60%, trace mitral regurgitation." },
-  { name: "Screening Mammogram (Bilateral)", plainName: "Breast Cancer Screening (Mammogram)", marker: "Bilateral Breast Tissue", type: "screening", recall: 1, findings: "BI-RADS 1: Negative for suspicious microcalcifications or masses." },
-  { name: "Low-Dose Chest CT Scan", plainName: "Lung Screening CT Scan", marker: "Bilateral Lung Fields", type: "diagnostic", recall: 1, findings: "Clear lung parenchyma without pulmonary nodules or focal consolidation." },
-  { name: "DEXA Bone Mineral Density Scan", plainName: "Bone Density Scan (Osteoporosis)", marker: "Lumbar Spine & Femoral Neck", type: "screening", recall: 2, findings: "T-score -1.6 at L1-L4; osteopenia without fracture." },
-  { name: "Cardiac Stress Test (SPECT)", plainName: "Heart Stress Test", marker: "Myocardial Perfusion", type: "diagnostic", recall: 3, findings: "No inducible ischemia; normal baseline exercise tolerance." },
-  { name: "Abdominal Ultrasound", plainName: "Abdominal Ultrasound (Liver/Gallbladder)", marker: "Right Upper Quadrant", type: "diagnostic", recall: 2, findings: "Normal hepatic echotexture; no cholelithiasis or biliary dilation." }
+  { name: "Screening Colonoscopy", plainName: "Colonoscopy (Colon Exam)", marker: "Lower Bowel / Colon", type: "diagnostic", recall: 10, findings: "" },
+  { name: "Upper Endoscopy (EGD)", plainName: "Stomach Camera Exam (EGD)", marker: "Esophagus / Stomach", type: "diagnostic", recall: 3, findings: "" },
+  { name: "Transthoracic Echocardiogram (TTE)", plainName: "Heart Ultrasound (Echo)", marker: "Heart / Thorax", type: "diagnostic", recall: 1, findings: "" },
+  { name: "Screening Mammogram (Bilateral)", plainName: "Breast Cancer Screening (Mammogram)", marker: "Bilateral Breast Tissue", type: "screening", recall: 1, findings: "" },
+  { name: "Low-Dose Chest CT Scan", plainName: "Lung Screening CT Scan", marker: "Bilateral Lung Fields", type: "diagnostic", recall: 1, findings: "" },
+  { name: "DEXA Bone Mineral Density Scan", plainName: "Bone Density Scan (Osteoporosis)", marker: "Lumbar Spine & Femoral Neck", type: "screening", recall: 2, findings: "" },
+  { name: "Cardiac Stress Test (SPECT)", plainName: "Heart Stress Test", marker: "Myocardial Perfusion", type: "diagnostic", recall: 3, findings: "" },
+  { name: "Abdominal Ultrasound", plainName: "Abdominal Ultrasound (Liver/Gallbladder)", marker: "Right Upper Quadrant", type: "diagnostic", recall: 2, findings: "" }
 ];
 
-const COMMON_VACCINES = [
-  { name: "Influenza (Annual Flu Vaccine)", plainName: "Flu Shot (Annual)", category: "Seasonal Respiratory", intervalYears: 1 },
-  { name: "COVID-19 (Updated mRNA Vaccine)", plainName: "COVID-19 Updated Booster", category: "Viral Respiratory", intervalYears: 1 },
-  { name: "Tdap (Tetanus, Diphtheria, Pertussis)", plainName: "Tetanus & Whooping Cough Booster", category: "Bacterial Toxoid", intervalYears: 10 },
-  { name: "Shingrix (Zoster Recombinant)", plainName: "Shingles Vaccine (2-Dose Series)", category: "Herpes Zoster", intervalYears: 99 },
-  { name: "Pneumococcal (PCV20 / Prevnar 20)", plainName: "Pneumonia Vaccine", category: "Pneumococcal", intervalYears: 99 },
-  { name: "Hepatitis B Recombinant Vaccine", plainName: "Hepatitis B Liver Vaccine", category: "Viral Hepatitis", intervalYears: 99 },
-  { name: "MMR (Measles, Mumps, Rubella)", plainName: "MMR Vaccine", category: "Childhood Viral", intervalYears: 99 },
-  { name: "HPV (Human Papillomavirus / Gardasil 9)", plainName: "HPV Cancer Prevention Vaccine", category: "Viral Onco-Prevention", intervalYears: 99 }
-];
+const COMMON_VACCINES = getStandardVaccines().map((v) => ({
+  cvx: v.cvx,
+  name: v.name,
+  plainName: v.plainName,
+  category: v.category,
+  intervalYears: v.interval === "annual" ? 1 : v.interval === "10-year" ? 10 : 99,
+  description: v.description
+}));
 
 const isArthroplastyOrSided = (surgName = "") => {
   const lower = (surgName || "").toLowerCase();
@@ -236,33 +239,72 @@ const isArthroplastyOrSided = (surgName = "") => {
   );
 };
 
+const isConditionWithLaterality = (condName = "") => {
+  const lower = (condName || "").toLowerCase();
+  return (
+    lower.includes("osteoarthritis") ||
+    lower.includes("carpal") ||
+    lower.includes("rotator") ||
+    lower.includes("hernia") ||
+    lower.includes("sciatica") ||
+    lower.includes("bursitis") ||
+    lower.includes("tendonitis") ||
+    lower.includes("fracture") ||
+    lower.includes("sprain")
+  );
+};
+
 export function PatientOnboardingModal({
   isOpen,
   onClose,
   initialProfile = {},
   onBatchCommit
 }) {
-  if (!isOpen) return null;
-
   // View state: "choice" | "wizard" | "pdf_upload" | "pdf_review"
   const [viewMode, setViewMode] = useState("choice");
 
   // Wizard Step: 1 (Demographics/Allergies) -> 2 (Conditions) -> 3 (Surgeries) -> 4 (Meds) -> 5 (Procedures) -> 6 (Vaccines) -> 7 (Review)
   const [wizardStep, setWizardStep] = useState(1);
+  const [validationError, setValidationError] = useState("");
 
-  // STEP 1 STATE: Split names, demographics & structured allergies
-  const initialNames = (initialProfile.name || "").trim().split(" ");
+  // Check if initialProfile is demo data to prevent bleed-through
+  const isInitialElena = initialProfile.name === "Elena Vance" || initialProfile.mrn === "PT-88201";
+  const cleanInitialName = isInitialElena ? "" : (initialProfile.name || "").trim();
+  const initialNames = cleanInitialName.split(" ");
+
+  // STEP 1 STATE: Demographics, Contact, Care Team & Pharmacy (All start blank)
   const [firstName, setFirstName] = useState(initialNames[0] || "");
   const [lastName, setLastName] = useState(initialNames.slice(1).join(" ") || "");
-  const [dob, setDob] = useState(initialProfile.dob || "1980-01-01");
+  const [dob, setDob] = useState((!isInitialElena && initialProfile.dob && initialProfile.dob !== "1968-04-12") ? initialProfile.dob : "");
   const [sex, setSex] = useState(initialProfile.sex || "female");
   const [otherSexSpecification, setOtherSexSpecification] = useState(
     initialProfile.sex === "other" ? (initialProfile.otherSexSpecification || "") : ""
   );
   const [bloodType, setBloodType] = useState(initialProfile.bloodType || "I don't know");
-  const [emergencyContactName, setEmergencyContactName] = useState(initialProfile.emergencyContactName || "");
+  const [veteranStatus, setVeteranStatus] = useState(
+    initialProfile.veteranStatus === "Yes" || initialProfile.veteranStatus === "yes" || (typeof initialProfile.veteranStatus === "string" && initialProfile.veteranStatus.toLowerCase().includes("veteran")) ? "Yes" : "No"
+  );
+  const [phone, setPhone] = useState(!isInitialElena ? (initialProfile.phone || "") : "");
+  const [email, setEmail] = useState(!isInitialElena ? (initialProfile.email || "") : "");
+  const [address, setAddress] = useState(!isInitialElena ? (initialProfile.address || "") : "");
+
+  // Emergency Contact (Split First Name and Last Name)
+  const initialEcFirst = !isInitialElena ? (initialProfile.emergencyContactFirstName || (initialProfile.emergencyContactName ? initialProfile.emergencyContactName.split(" ")[0] : "")) : "";
+  const initialEcLast = !isInitialElena ? (initialProfile.emergencyContactLastName || (initialProfile.emergencyContactName ? initialProfile.emergencyContactName.split(" ").slice(1).join(" ") : "")) : "";
+  const [emergencyContactFirstName, setEmergencyContactFirstName] = useState(initialEcFirst);
+  const [emergencyContactLastName, setEmergencyContactLastName] = useState(initialEcLast);
   const [emergencyContactRelation, setEmergencyContactRelation] = useState(initialProfile.emergencyContactRelation || "Spouse");
-  const [emergencyContactPhone, setEmergencyContactPhone] = useState(initialProfile.emergencyContactPhone || "");
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState(!isInitialElena ? (initialProfile.emergencyContactPhone || "") : "");
+
+  // Care Team
+  const [pcpName, setPcpName] = useState(!isInitialElena && initialProfile.pcp ? initialProfile.pcp.replace(/\s*\(Internal Medicine\)/gi, "").trim() : "");
+  const [pcpClinic, setPcpClinic] = useState(!isInitialElena ? (initialProfile.clinic || "") : "");
+  const [pcpPhone, setPcpPhone] = useState(!isInitialElena ? (initialProfile.pcpPhone || "") : "");
+
+  // Preferred Pharmacy
+  const [pharmacyName, setPharmacyName] = useState(!isInitialElena && initialProfile.pharmacy?.name ? initialProfile.pharmacy.name : "");
+  const [pharmacyAddress, setPharmacyAddress] = useState(!isInitialElena && initialProfile.pharmacy?.address ? initialProfile.pharmacy.address : "");
+  const [pharmacyPhone, setPharmacyPhone] = useState(!isInitialElena && initialProfile.pharmacy?.phone ? initialProfile.pharmacy.phone : "");
 
   // Multi-entry structured drug allergies
   const [isNkda, setIsNkda] = useState(false);
@@ -275,6 +317,8 @@ export function PatientOnboardingModal({
     }
   ]);
 
+
+
   // STEP 2 STATE: Conditions (selected + custom addition)
   const [conditionSearch, setConditionSearch] = useState("");
   const [selectedConditions, setSelectedConditions] = useState([]);
@@ -283,6 +327,9 @@ export function PatientOnboardingModal({
     name: "",
     regionId: "general_systemic",
     onsetDate: currentYear.toString(),
+    provider: "",
+    facility: "",
+    laterality: "Right",
     notes: ""
   });
 
@@ -350,6 +397,125 @@ export function PatientOnboardingModal({
   });
   const fileInputRef = useRef(null);
 
+  // FEDERAL HEALTH APIS: NLM CTSS (Conditions) & NIH RxNorm (Medications)
+  const [ctssResults, setCtssResults] = useState([]);
+  const [isSearchingCtss, setIsSearchingCtss] = useState(false);
+
+  const [rxnormResults, setRxnormResults] = useState([]);
+  const [isSearchingRxNorm, setIsSearchingRxNorm] = useState(false);
+
+  // Synchronize initial state when opening modal with strict zero demo bleed
+  useEffect(() => {
+    if (isOpen) {
+      setValidationError("");
+      const isDemo = initialProfile.name === "Elena Vance" || initialProfile.mrn === "PT-88201";
+      if (!isDemo && initialProfile.name) {
+        const cleanName = (initialProfile.name || "").trim();
+        const names = cleanName.split(" ");
+        setFirstName(names[0] || "");
+        setLastName(names.slice(1).join(" ") || "");
+        if (initialProfile.dob && initialProfile.dob !== "1968-04-12") setDob(initialProfile.dob);
+        if (initialProfile.sex) setSex(initialProfile.sex);
+        if (initialProfile.bloodType) setBloodType(initialProfile.bloodType);
+        if (initialProfile.phone) setPhone(initialProfile.phone);
+        if (initialProfile.email) setEmail(initialProfile.email);
+        if (initialProfile.address) setAddress(initialProfile.address);
+        if (initialProfile.veteranStatus) {
+          setVeteranStatus(initialProfile.veteranStatus === "Yes" || initialProfile.veteranStatus === "yes" || initialProfile.veteranStatus.toLowerCase().includes("veteran") ? "Yes" : "No");
+        }
+        
+        const ecFirst = initialProfile.emergencyContactFirstName || (initialProfile.emergencyContactName ? initialProfile.emergencyContactName.split(" ")[0] : "");
+        const ecLast = initialProfile.emergencyContactLastName || (initialProfile.emergencyContactName ? initialProfile.emergencyContactName.split(" ").slice(1).join(" ") : "");
+        if (ecFirst) setEmergencyContactFirstName(ecFirst);
+        if (ecLast) setEmergencyContactLastName(ecLast);
+        if (initialProfile.emergencyContactRelation) setEmergencyContactRelation(initialProfile.emergencyContactRelation);
+        if (initialProfile.emergencyContactPhone) setEmergencyContactPhone(initialProfile.emergencyContactPhone);
+
+        if (initialProfile.pcp) setPcpName(initialProfile.pcp.replace(/\s*\(Internal Medicine\)/gi, "").trim());
+        if (initialProfile.clinic) setPcpClinic(initialProfile.clinic);
+        if (initialProfile.pcpPhone) setPcpPhone(initialProfile.pcpPhone);
+
+        if (initialProfile.pharmacy?.name) setPharmacyName(initialProfile.pharmacy.name);
+        if (initialProfile.pharmacy?.address) setPharmacyAddress(initialProfile.pharmacy.address);
+        if (initialProfile.pharmacy?.phone) setPharmacyPhone(initialProfile.pharmacy.phone);
+      } else {
+        // Clear all fields for a fresh manual health intake
+        setFirstName("");
+        setLastName("");
+        setDob("");
+        setSex("female");
+        setBloodType("I don't know");
+        setVeteranStatus("No");
+        setPhone("");
+        setEmail("");
+        setAddress("");
+        setEmergencyContactFirstName("");
+        setEmergencyContactLastName("");
+        setEmergencyContactRelation("Spouse");
+        setEmergencyContactPhone("");
+        setPcpName("");
+        setPcpClinic("");
+        setPcpPhone("");
+        setPharmacyName("");
+        setPharmacyAddress("");
+        setPharmacyPhone("");
+        setSelectedConditions([]);
+        setSelectedSurgeries([]);
+        setSelectedMeds([]);
+        setSelectedProcedures([]);
+        setSelectedVaccines([]);
+      }
+    }
+  }, [isOpen, initialProfile]);
+
+  // Debounced search for NLM CTSS ICD-10 conditions
+  useEffect(() => {
+    const q = (conditionSearch || "").trim();
+    if (q.length < 2) {
+      setCtssResults([]);
+      setIsSearchingCtss(false);
+      return;
+    }
+
+    setIsSearchingCtss(true);
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchConditions(q);
+        setCtssResults(results || []);
+      } catch (e) {
+        console.warn("CTSS search error:", e);
+      } finally {
+        setIsSearchingCtss(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [conditionSearch]);
+
+  // Debounced search for NIH RxNorm medications
+  useEffect(() => {
+    const q = (medSearch || "").trim();
+    if (q.length < 2) {
+      setRxnormResults([]);
+      setIsSearchingRxNorm(false);
+      return;
+    }
+
+    setIsSearchingRxNorm(true);
+    const timer = setTimeout(async () => {
+      try {
+        const results = await searchMedications(q);
+        setRxnormResults(results || []);
+      } catch (e) {
+        console.warn("RxNorm search error:", e);
+      } finally {
+        setIsSearchingRxNorm(false);
+      }
+    }, 400);
+
+    return () => clearTimeout(timer);
+  }, [medSearch]);
+
   /* -------------------------------------------------------------
      ALLERGY SUBFORM HANDLERS
   ------------------------------------------------------------- */
@@ -395,10 +561,55 @@ export function PatientOnboardingModal({
   /* -------------------------------------------------------------
      STEP 2: CONDITIONS HANDLERS
   ------------------------------------------------------------- */
+  const handleSelectCtssCondition = (ctssItem) => {
+    if (selectedConditions.some((c) => c.name.toLowerCase() === ctssItem.name.toLowerCase())) {
+      return;
+    }
+    const hasLat = isConditionWithLaterality(ctssItem.name);
+    const regionObj = ANATOMICAL_REGIONS.find((r) => {
+      const t = ctssItem.name.toLowerCase();
+      if (t.includes("hypertens") || t.includes("heart") || t.includes("coronary")) return r.id === "chest_cardiac";
+      if (t.includes("head") || t.includes("migraine") || t.includes("stroke") || t.includes("ear") || t.includes("eye")) return r.id === "head_neck";
+      if (t.includes("lung") || t.includes("asthma") || t.includes("copd") || t.includes("bronch")) return r.id === "lungs_respiratory";
+      if (t.includes("knee") || t.includes("leg") || t.includes("foot") || t.includes("ankle")) return r.id === "right_leg";
+      if (t.includes("shoulder") || t.includes("arm") || t.includes("hand") || t.includes("wrist")) return r.id === "right_arm";
+      if (t.includes("back") || t.includes("spine") || t.includes("lumbar")) return r.id === "spine_back";
+      if (t.includes("gerd") || t.includes("reflux") || t.includes("stomach") || t.includes("gastric")) return r.id === "stomach_esophagus";
+      if (t.includes("colon") || t.includes("bowel") || t.includes("rectal")) return r.id === "lower_bowel";
+      return false;
+    }) || ANATOMICAL_REGIONS[ANATOMICAL_REGIONS.length - 1];
+
+    let coords = { ...regionObj.coords };
+    if (hasLat) {
+      coords.x = -Math.abs(coords.x || 1.0);
+    }
+
+    setSelectedConditions((prev) => [
+      ...prev,
+      {
+        id: `cond-ctss-${Date.now()}`,
+        name: ctssItem.name,
+        plainName: ctssItem.name,
+        region: regionObj.label,
+        coords,
+        system: regionObj.system,
+        isPosterior: regionObj.isPosterior || false,
+        icd10: ctssItem.code,
+        onsetDate: currentYear.toString(),
+        provider: "",
+        facility: "",
+        hasLaterality: hasLat,
+        laterality: hasLat ? "Right" : "",
+        notes: `ICD-10-CM: ${ctssItem.code}`
+      }
+    ]);
+  };
+
   const toggleConditionPreset = (cond) => {
     if (selectedConditions.some((c) => c.name === cond.name)) {
       setSelectedConditions((prev) => prev.filter((c) => c.name !== cond.name));
     } else {
+      const hasLat = cond.hasLaterality || isConditionWithLaterality(cond.name);
       setSelectedConditions((prev) => [
         ...prev,
         {
@@ -411,29 +622,72 @@ export function PatientOnboardingModal({
           icd10: cond.icd10,
           onsetDate: currentYear.toString(),
           provider: "",
+          facility: "",
+          hasLaterality: hasLat,
+          laterality: hasLat ? "Right" : "",
           notes: cond.notes || ""
         }
       ]);
     }
   };
 
+  const handleUpdateConditionField = (id, field, value) => {
+    setSelectedConditions((prev) =>
+      prev.map((c) => {
+        if (c.id !== id) return c;
+        const updated = { ...c, [field]: value };
+        if (field === "laterality" && updated.coords) {
+          if (value === "Right" && updated.coords.x > 0) {
+            updated.coords = { ...updated.coords, x: -Math.abs(updated.coords.x) };
+          } else if (value === "Left" && updated.coords.x < 0) {
+            updated.coords = { ...updated.coords, x: Math.abs(updated.coords.x) };
+          } else if (value === "Bilateral") {
+            updated.coords = { ...updated.coords, x: 0 };
+          }
+        }
+        return updated;
+      })
+    );
+  };
+
   const handleSaveCustomCondition = () => {
     if (!customCond.name.trim()) return;
     const regionObj = ANATOMICAL_REGIONS.find((r) => r.id === customCond.regionId) || ANATOMICAL_REGIONS[ANATOMICAL_REGIONS.length - 1];
+    const hasLat = isConditionWithLaterality(customCond.name);
+    let coords = { ...regionObj.coords };
+    if (hasLat && customCond.laterality === "Right") {
+      coords.x = -Math.abs(coords.x || 1.0);
+    } else if (hasLat && customCond.laterality === "Left") {
+      coords.x = Math.abs(coords.x || 1.0);
+    } else if (hasLat && customCond.laterality === "Bilateral") {
+      coords.x = 0;
+    }
+
     const newCond = {
       id: `cond-custom-${Date.now()}`,
       name: customCond.name.trim(),
       plainName: customCond.name.trim(),
       region: regionObj.label,
-      coords: regionObj.coords,
+      coords,
       system: regionObj.system,
       isPosterior: regionObj.isPosterior || false,
       onsetDate: customCond.onsetDate || "N/A",
-      provider: "",
-      notes: customCond.notes || "Custom entered condition."
+      provider: customCond.provider || "",
+      facility: customCond.facility || "",
+      hasLaterality: hasLat,
+      laterality: hasLat ? (customCond.laterality || "Right") : "",
+      notes: customCond.notes || ""
     };
     setSelectedConditions((prev) => [...prev, newCond]);
-    setCustomCond({ name: "", regionId: "general_systemic", onsetDate: currentYear.toString(), notes: "" });
+    setCustomCond({
+      name: "",
+      regionId: "general_systemic",
+      onsetDate: currentYear.toString(),
+      provider: "",
+      facility: "",
+      laterality: "Right",
+      notes: ""
+    });
     setIsAddingCustomCond(false);
   };
 
@@ -560,16 +814,18 @@ export function PatientOnboardingModal({
   /* -------------------------------------------------------------
      STEP 4: MEDICATIONS HANDLERS
   ------------------------------------------------------------- */
-  const toggleMedicationItem = (drugName) => {
+  const toggleMedicationItem = (drugName, rxcui = "") => {
     if (selectedMeds.some((m) => m.name.toLowerCase() === drugName.toLowerCase())) {
       setSelectedMeds((prev) => prev.filter((m) => m.name.toLowerCase() !== drugName.toLowerCase()));
     } else {
       const defaults = getMedicationClinicalDefaults(drugName, selectedConditions);
+      const newMedId = `med-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`;
       setSelectedMeds((prev) => [
         ...prev,
         {
-          id: `med-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          id: newMedId,
           name: drugName,
+          rxcui: rxcui || "",
           doseNumber: defaults.doseNumber,
           doseUnit: defaults.doseUnit,
           dosage: `${defaults.doseNumber} ${defaults.doseUnit}`,
@@ -578,9 +834,31 @@ export function PatientOnboardingModal({
           startDate: currentYear.toString(),
           indication: defaults.indication,
           customIndication: "",
-          route: "Oral (PO)"
+          route: "Oral (PO)",
+          lastPickedUpDate: "",
+          lastPickedUpPharmacy: "",
+          daysSupply: "",
+          quantityAmount: "",
+          refillsRemaining: "",
+          rxNumber: ""
         }
       ]);
+
+      // Dynamically fetch standardized clinical strengths from NIH RxNorm
+      getMedicationStrengths(rxcui, drugName).then((strengthInfo) => {
+        if (strengthInfo?.strengths?.length > 0) {
+          setSelectedMeds((prev) =>
+            prev.map((m) => {
+              if (m.id !== newMedId) return m;
+              return {
+                ...m,
+                standardDoses: strengthInfo.strengths,
+                dosageForms: strengthInfo.dosageForms
+              };
+            })
+          );
+        }
+      }).catch((err) => console.warn("RxNorm strength lookup error:", err));
     }
   };
 
@@ -642,7 +920,7 @@ export function PatientOnboardingModal({
           anatomical_marker: proc.marker,
           performing_clinician: "",
           institution: "",
-          findings: proc.findings,
+          findings: proc.findings || "",
           recall_interval_years: proc.recall
         }
       ]);
@@ -657,6 +935,10 @@ export function PatientOnboardingModal({
 
   const handleSaveCustomProcedure = () => {
     if (!customProc.name.trim()) return;
+    if (!customProc.findings?.trim()) {
+      alert("Please provide the procedure findings/results (Required).");
+      return;
+    }
     setSelectedProcedures((prev) => [
       ...prev,
       {
@@ -668,7 +950,7 @@ export function PatientOnboardingModal({
         anatomical_marker: "General Diagnostic Site",
         performing_clinician: customProc.physician || "",
         institution: customProc.facility || "",
-        findings: customProc.findings || "Routine diagnostic study performed.",
+        findings: customProc.findings.trim(),
         recall_interval_years: Number(customProc.recallYears) || 1
       }
     ]);
@@ -708,7 +990,7 @@ export function PatientOnboardingModal({
 
   const handleUpdateVaccineField = (id, field, value) => {
     setSelectedVaccines((prev) =>
-      prev.map((v) => (v.id === id ? { ...v, [field]: value } : v))
+      prev.map((v) => (v.id === id ? { ...p, [field]: value } : v))
     );
   };
 
@@ -739,11 +1021,23 @@ export function PatientOnboardingModal({
      BATCH COMMIT (FINISH WIZARD)
   ------------------------------------------------------------- */
   const handleFinishWizard = () => {
-    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim() || "Elena Vance";
+    const combinedName = `${firstName.trim()} ${lastName.trim()}`.trim();
+    const fullName = combinedName || initialProfile.name || "Patient";
     const dynamicAge = calculateAge(dob);
-    const formattedContact = emergencyContactName.trim()
-      ? `${emergencyContactName.trim()} (${emergencyContactRelation}) • ${emergencyContactPhone.trim()}`
+    const combinedEcName = `${emergencyContactFirstName.trim()} ${emergencyContactLastName.trim()}`.trim();
+    const formattedContact = combinedEcName
+      ? `${combinedEcName} (${emergencyContactRelation}) • ${emergencyContactPhone.trim()}`
       : "N/A";
+
+    // Validate procedure findings: Findings cannot be blank!
+    const unenteredProc = selectedProcedures.find(
+      (p) => !p.findings || !p.findings.trim()
+    );
+    if (unenteredProc) {
+      alert(`Findings are required for all procedures. Please provide findings for "${unenteredProc.procedure_name || unenteredProc.plainName}" in Step 5.`);
+      setWizardStep(5);
+      return;
+    }
 
     // Format structured allergies for demographics
     const formattedAllergiesList = isNkda
@@ -760,35 +1054,104 @@ export function PatientOnboardingModal({
             status: "Active"
           }));
 
-    // Process medications with final indications
+    // Process medications with final indications and dispensing fields
     const finalizedMeds = selectedMeds.map((m) => ({
       ...m,
       dosage: m.dosage || `${m.doseNumber || "10"} ${m.doseUnit || "mg"}`,
-      indication: m.indication === "Other" && m.customIndication ? m.customIndication : m.indication
+      indication: m.indication === "Other" && m.customIndication ? m.customIndication : m.indication,
+      days_supply: m.daysSupply ? Number(m.daysSupply) : null,
+      daysSupply: m.daysSupply,
+      last_picked_up_date: m.lastPickedUpDate || null,
+      lastPickedUpDate: m.lastPickedUpDate,
+      last_picked_up_pharmacy: m.lastPickedUpPharmacy || null,
+      lastPickedUpPharmacy: m.lastPickedUpPharmacy,
+      quantity_amount: m.quantityAmount ? Number(m.quantityAmount) : null,
+      quantityAmount: m.quantityAmount,
+      refills_remaining: m.refillsRemaining !== "" && m.refillsRemaining !== undefined ? Number(m.refillsRemaining) : null,
+      refillsRemaining: m.refillsRemaining,
+      rx_number: m.rxNumber || null,
+      rxNumber: m.rxNumber
     }));
+
+    // Finalize conditions coords based on laterality
+    const finalizedConditions = selectedConditions.map((c) => {
+      let x = c.coordinates?.x || 0;
+      if (c.laterality === "Right") {
+        x = -Math.abs(x === 0 ? 0.35 : x);
+      } else if (c.laterality === "Left") {
+        x = Math.abs(x === 0 ? 0.35 : x);
+      } else if (c.laterality === "Bilateral") {
+        x = 0;
+      }
+      return {
+        ...c,
+        coordinates: {
+          x,
+          y: c.coordinates?.y || 0,
+          z: c.coordinates?.z || 0
+        }
+      };
+    });
 
     onBatchCommit({
       profile: {
         name: fullName,
+        firstName: firstName.trim(),
+        lastName: lastName.trim(),
         dob,
         age: dynamicAge,
         sex,
         otherSexSpecification: sex === "other" ? otherSexSpecification : "",
         bloodType,
-        emergencyContactName,
+        veteranStatus,
+        phone: phone.trim(),
+        email: email.trim(),
+        address: address.trim(),
+        emergencyContactFirstName: emergencyContactFirstName.trim(),
+        emergencyContactLastName: emergencyContactLastName.trim(),
+        emergencyContactName: combinedEcName,
         emergencyContactRelation,
-        emergencyContactPhone,
-        emergencyContact: formattedContact
+        emergencyContactPhone: emergencyContactPhone.trim(),
+        emergencyContact: formattedContact,
+        pcp: pcpName.trim() ? (pcpName.trim().toLowerCase().includes("dr.") ? pcpName.trim() : `Dr. ${pcpName.trim()}`) : "",
+        clinic: pcpClinic.trim(),
+        pcpPhone: pcpPhone.trim(),
+        pharmacy: {
+          name: pharmacyName.trim(),
+          address: pharmacyAddress.trim(),
+          phone: pharmacyPhone.trim()
+        }
       },
       isNkda,
       allergiesList: formattedAllergiesList,
-      conditions: selectedConditions,
+      conditions: finalizedConditions,
       surgeries: selectedSurgeries,
       medications: finalizedMeds,
       procedures: selectedProcedures,
       vaccinations: selectedVaccines
     });
     onClose();
+  };
+
+  const handleStepForward = () => {
+    if (wizardStep === 1) {
+      if (!firstName.trim() || !lastName.trim()) {
+        alert("Please enter both First Name and Last Name.");
+        return;
+      }
+      if (!dob) {
+        alert("Please enter Date of Birth.");
+        return;
+      }
+    }
+    if (wizardStep === 5) {
+      const emptyProc = selectedProcedures.find((p) => !p.findings || !p.findings.trim());
+      if (emptyProc) {
+        alert(`Findings are required for all procedures. Please document findings for "${emptyProc.procedure_name || emptyProc.plainName}" before continuing.`);
+        return;
+      }
+    }
+    setWizardStep((s) => s + 1);
   };
 
   /* -------------------------------------------------------------
@@ -946,7 +1309,7 @@ export function PatientOnboardingModal({
 
     onBatchCommit({
       profile: {
-        name: extractedData.profile?.name || `${firstName} ${lastName}`.trim() || "Elena Vance",
+        name: extractedData.profile?.name || `${firstName} ${lastName}`.trim() || initialProfile.name || "Patient",
         dob: finalDob,
         age: dynamicAge,
         sex,
@@ -1001,6 +1364,8 @@ export function PatientOnboardingModal({
     return ALPHABETICAL_COMMON_MEDICATIONS.filter((m) => m.toLowerCase().includes(q));
   }, [medSearch]);
 
+  if (!isOpen) return null;
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
       {/* Modal Container expanded to max-w-5xl */}
@@ -1016,7 +1381,7 @@ export function PatientOnboardingModal({
               <div className="flex items-center gap-2">
                 <h2 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
                   {viewMode === "choice" && "Welcome to Your Interactive Health Avatar"}
-                  {viewMode === "wizard" && `Patient Health Intake (Step ${wizardStep} of 6)`}
+                  {viewMode === "wizard" && `Patient Health Intake (Step ${wizardStep} of 7)`}
                   {viewMode === "pdf_upload" && "Smart Health Record Import"}
                   {viewMode === "pdf_review" && "Verify Extracted Health Data"}
                 </h2>
@@ -1075,7 +1440,7 @@ export function PatientOnboardingModal({
                       </span>
                     </div>
                     <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
-                      Structured 6-step questionnaire with clinical specificity, anatomical laterality checks, and custom dosing controls.
+                      Structured 7-step clinical questionnaire with anatomical precision, laterality controls, and full verification.
                     </p>
                   </div>
                   <div className="mt-6 flex items-center gap-1.5 text-xs font-bold text-teal-700 dark:text-teal-400">
@@ -1126,15 +1491,16 @@ export function PatientOnboardingModal({
           {/* VIEW 2: GUIDED WIZARD */}
           {viewMode === "wizard" && (
             <div className="space-y-6">
-              {/* Wizard Progress Stepper Bar */}
-              <div className="grid grid-cols-6 gap-2 pb-4 border-b border-slate-200 dark:border-slate-800">
+              {/* Wizard Progress Stepper Bar (7 Steps) */}
+              <div className="grid grid-cols-2 sm:grid-cols-4 lg:grid-cols-7 gap-2 pb-4 border-b border-slate-200 dark:border-slate-800">
                 {[
-                  { step: 1, title: "Demographics & Allergies", sub: "Profile" },
+                  { step: 1, title: "Demographics & Contacts", sub: "Profile" },
                   { step: 2, title: "Medical Conditions", sub: "Diagnoses" },
                   { step: 3, title: "Past Surgeries", sub: "Incisions & Joints" },
                   { step: 4, title: "Medications", sub: "Active Rx & Dosing" },
                   { step: 5, title: "Procedures", sub: "Diagnostic Tests" },
-                  { step: 6, title: "Vaccines", sub: "Immunizations" }
+                  { step: 6, title: "Vaccines", sub: "Immunizations" },
+                  { step: 7, title: "Review & Confirm", sub: "Confirmation" }
                 ].map((item) => {
                   const isActive = wizardStep === item.step;
                   const isCompleted = wizardStep > item.step;
@@ -1176,24 +1542,24 @@ export function PatientOnboardingModal({
               </div>
 
               {/* -------------------------------------------------------------
-                  STEP 1: DEMOGRAPHICS & STRUCTURED ALLERGY INTAKE
+                  STEP 1: DEMOGRAPHICS, CONTACT, VETERAN STATUS & ALLERGIES
               ------------------------------------------------------------- */}
               {wizardStep === 1 && (
                 <div className="space-y-6 animate-in fade-in duration-150">
                   <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
                     <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                       <User className="w-4 h-4 text-teal-600" />
-                      <span>Step 1: Patient Demographics & Granular Allergy Intake</span>
+                      <span>Step 1: Patient Demographics, Veteran Status & Care Details</span>
                     </h3>
                     <p className="text-xs text-slate-500 mt-1">
-                      Configure your identity and document all adverse drug reactions to establish allergy safety rules.
+                      Configure your clinical identity, contact channels, emergency contacts, care team, and drug allergies.
                     </p>
                   </div>
 
-                  {/* Demographics Grid */}
-                  <div className="bg-slate-50/60 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80">
-                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-3">
-                      Basic Information
+                  {/* Section A: Basic Identification */}
+                  <div className="bg-slate-50/60 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-4">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      Basic Identification
                     </h4>
                     <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
                       {/* First Name */}
@@ -1205,7 +1571,7 @@ export function PatientOnboardingModal({
                           type="text"
                           value={firstName}
                           onChange={(e) => setFirstName(e.target.value)}
-                          placeholder="e.g. Elena"
+                          placeholder="e.g. John"
                           className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-teal-500 focus:outline-hidden font-medium"
                         />
                       </div>
@@ -1219,7 +1585,7 @@ export function PatientOnboardingModal({
                           type="text"
                           value={lastName}
                           onChange={(e) => setLastName(e.target.value)}
-                          placeholder="e.g. Vance"
+                          placeholder="e.g. Smith"
                           className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-teal-500 focus:outline-hidden font-medium"
                         />
                       </div>
@@ -1270,9 +1636,8 @@ export function PatientOnboardingModal({
                       </div>
                     </div>
 
-                    {/* Blood Type & Emergency Contact Breakdown */}
-                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/60">
-                      {/* Blood Type */}
+                    {/* Blood Type & Veteran Status Explicit Question */}
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 pt-3 border-t border-slate-200/60 dark:border-slate-700/60">
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                           Blood Type
@@ -1290,21 +1655,97 @@ export function PatientOnboardingModal({
                         </select>
                       </div>
 
-                      {/* Emergency Contact Name */}
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Emergency Contact Name
+                          U.S. Military Veteran Status <span className="text-slate-400 font-normal">(Defaults to No)</span>
+                        </label>
+                        <select
+                          value={veteranStatus}
+                          onChange={(e) => setVeteranStatus(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 font-medium"
+                        >
+                          <option value="No">No (Non-Veteran)</option>
+                          <option value="Yes">Yes (U.S. Military Veteran)</option>
+                        </select>
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section B: Contact Information & Address */}
+                  <div className="bg-slate-50/60 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      Contact Information & Mailing Address
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Primary Phone Number
                         </label>
                         <input
-                          type="text"
-                          value={emergencyContactName}
-                          onChange={(e) => setEmergencyContactName(e.target.value)}
-                          placeholder="e.g. David Vance"
+                          type="tel"
+                          value={phone}
+                          onChange={(e) => setPhone(e.target.value)}
+                          placeholder="e.g. (555) 234-5678"
                           className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
                         />
                       </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Email Address
+                        </label>
+                        <input
+                          type="email"
+                          value={email}
+                          onChange={(e) => setEmail(e.target.value)}
+                          placeholder="e.g. patient@example.com"
+                          className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Full Mailing Address
+                        </label>
+                        <input
+                          type="text"
+                          value={address}
+                          onChange={(e) => setAddress(e.target.value)}
+                          placeholder="e.g. 124 Main Street, Boston, MA 02115"
+                          className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                        />
+                      </div>
+                    </div>
+                  </div>
 
-                      {/* Emergency Contact Relationship */}
+                  {/* Section C: Emergency Contact (Split First & Last Name) */}
+                  <div className="bg-slate-50/60 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-3">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300">
+                      Emergency Contact Information
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Contact First Name
+                        </label>
+                        <input
+                          type="text"
+                          value={emergencyContactFirstName}
+                          onChange={(e) => setEmergencyContactFirstName(e.target.value)}
+                          placeholder="e.g. David"
+                          className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                        />
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Contact Last Name
+                        </label>
+                        <input
+                          type="text"
+                          value={emergencyContactLastName}
+                          onChange={(e) => setEmergencyContactLastName(e.target.value)}
+                          placeholder="e.g. Smith"
+                          className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                        />
+                      </div>
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
                           Relationship
@@ -1321,19 +1762,116 @@ export function PatientOnboardingModal({
                           ))}
                         </select>
                       </div>
-
-                      {/* Emergency Contact Phone */}
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Phone Number
+                          Emergency Phone Number
                         </label>
                         <input
                           type="tel"
                           value={emergencyContactPhone}
                           onChange={(e) => setEmergencyContactPhone(e.target.value)}
-                          placeholder="e.g. (617) 555-0143"
+                          placeholder="e.g. (555) 987-6543"
                           className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
                         />
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Section D: Care Team & Preferred Pharmacy */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Care Team */}
+                    <div className="bg-slate-50/60 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <HeartHandshake className="w-3.5 h-3.5 text-teal-600" />
+                        <span>Care Team (Primary Clinician)</span>
+                      </h4>
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">
+                            Primary Care Physician
+                          </label>
+                          <input
+                            type="text"
+                            value={pcpName}
+                            onChange={(e) => setPcpName(e.target.value)}
+                            placeholder="e.g. Dr. Sarah Jenkins"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">
+                              Clinic / Hospital
+                            </label>
+                            <input
+                              type="text"
+                              value={pcpClinic}
+                              onChange={(e) => setPcpClinic(e.target.value)}
+                              placeholder="e.g. Mass General Hospital"
+                              className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">
+                              Office Phone
+                            </label>
+                            <input
+                              type="tel"
+                              value={pcpPhone}
+                              onChange={(e) => setPcpPhone(e.target.value)}
+                              placeholder="e.g. (617) 555-0199"
+                              className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                            />
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Preferred Pharmacy */}
+                    <div className="bg-slate-50/60 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80 space-y-3">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 flex items-center gap-1.5">
+                        <Building className="w-3.5 h-3.5 text-teal-600" />
+                        <span>Preferred Pharmacy</span>
+                      </h4>
+                      <div className="space-y-2">
+                        <div>
+                          <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">
+                            Pharmacy Name
+                          </label>
+                          <input
+                            type="text"
+                            value={pharmacyName}
+                            onChange={(e) => setPharmacyName(e.target.value)}
+                            placeholder="e.g. Walgreens #1042 / CVS Pharmacy"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                        <div className="grid grid-cols-2 gap-2">
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">
+                              Pharmacy Address
+                            </label>
+                            <input
+                              type="text"
+                              value={pharmacyAddress}
+                              onChange={(e) => setPharmacyAddress(e.target.value)}
+                              placeholder="e.g. 456 Elm St, Boston"
+                              className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                            />
+                          </div>
+                          <div>
+                            <label className="block text-[11px] font-semibold text-slate-600 dark:text-slate-400 mb-0.5">
+                              Pharmacy Phone
+                            </label>
+                            <input
+                              type="tel"
+                              value={pharmacyPhone}
+                              onChange={(e) => setPharmacyPhone(e.target.value)}
+                              placeholder="e.g. (617) 555-8800"
+                              className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                            />
+                          </div>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -1540,6 +2078,55 @@ export function PatientOnboardingModal({
                         </div>
                       </div>
 
+                      {/* Split Clinician & Hospital and Laterality */}
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Laterality (If Sided)
+                          </label>
+                          <div className="grid grid-cols-3 gap-1">
+                            {["Right", "Left", "Bilateral"].map((side) => (
+                              <button
+                                key={side}
+                                type="button"
+                                onClick={() => setCustomCond((c) => ({ ...c, laterality: side }))}
+                                className={`py-1 text-xs font-bold rounded border transition-colors ${
+                                  customCond.laterality === side
+                                    ? "bg-teal-700 text-white border-teal-700"
+                                    : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700"
+                                }`}
+                              >
+                                {side}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Diagnosing Clinician
+                          </label>
+                          <input
+                            type="text"
+                            value={customCond.provider}
+                            onChange={(e) => setCustomCond((c) => ({ ...c, provider: e.target.value }))}
+                            placeholder="e.g. Dr. Adams"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Facility / Hospital
+                          </label>
+                          <input
+                            type="text"
+                            value={customCond.facility}
+                            onChange={(e) => setCustomCond((c) => ({ ...c, facility: e.target.value }))}
+                            placeholder="e.g. Mass General Hospital"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                      </div>
+
                       <div className="flex items-center justify-between pt-1">
                         <input
                           type="text"
@@ -1571,6 +2158,55 @@ export function PatientOnboardingModal({
                       className="w-full pl-9 pr-4 py-2 text-xs border rounded-xl bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
                     />
                   </div>
+
+                  {/* NLM CTSS ICD-10 Search Autocompletions */}
+                  {conditionSearch.trim().length >= 2 && (
+                    <div className="p-3 rounded-xl border bg-teal-50/70 dark:bg-teal-950/30 border-teal-300 dark:border-teal-700/80 space-y-2">
+                      <div className="flex items-center justify-between text-[11px] font-bold text-teal-950 dark:text-teal-200 px-1">
+                        <span className="flex items-center gap-1.5">
+                          <Activity className="w-3.5 h-3.5 text-teal-600" />
+                          <span>NLM Standardized ICD-10-CM Conditions</span>
+                        </span>
+                        {isSearchingCtss ? (
+                          <span className="text-[10px] text-teal-600 animate-pulse">Searching NIH CTSS...</span>
+                        ) : (
+                          <span className="text-[10px] text-teal-600 font-mono">{ctssResults.length} matches</span>
+                        )}
+                      </div>
+
+                      {ctssResults.length > 0 ? (
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5 max-h-48 overflow-y-auto pr-1">
+                          {ctssResults.map((item) => {
+                            const isAdded = selectedConditions.some(
+                              (c) => c.name.toLowerCase() === item.name.toLowerCase() || (c.icd10 && c.icd10 === item.code)
+                            );
+                            return (
+                              <button
+                                key={item.code}
+                                type="button"
+                                onClick={() => handleSelectCtssCondition(item)}
+                                className={`p-2 rounded-lg border text-left text-xs transition-all flex items-center justify-between gap-1.5 ${
+                                  isAdded
+                                    ? "bg-teal-700 text-white border-teal-700 font-bold shadow-2xs"
+                                    : "bg-white dark:bg-slate-900 border-teal-200 dark:border-teal-800 text-slate-800 dark:text-slate-200 hover:border-teal-400 hover:bg-teal-50/50"
+                                }`}
+                              >
+                                <div className="min-w-0 flex-1">
+                                  <div className="font-bold truncate text-[11px]">{item.name}</div>
+                                  <div className="text-[10px] font-mono opacity-80">ICD-10: {item.code}</div>
+                                </div>
+                                <span className="text-xs font-bold shrink-0">{isAdded ? "✓" : "+"}</span>
+                              </button>
+                            );
+                          })}
+                        </div>
+                      ) : !isSearchingCtss && (
+                        <div className="text-[11px] text-slate-500 italic px-1">
+                          No exact ICD-10 matches found for "{conditionSearch}". You can add it as a custom condition.
+                        </div>
+                      )}
+                    </div>
+                  )}
 
                   {/* Grid of Common Conditions */}
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-[360px] overflow-y-auto pr-1">
@@ -1608,47 +2244,94 @@ export function PatientOnboardingModal({
                             </div>
                           </div>
 
-                          {/* Reveal diagnosis year dropdown and clinician inputs when checked */}
+                          {/* Reveal diagnosis year dropdown, laterality selector and split clinician/hospital inputs when checked */}
                           {isSelected && (
-                            <div className="mt-2.5 pt-2.5 border-t border-teal-200/60 dark:border-teal-800/60 grid grid-cols-2 gap-2">
-                              <div>
-                                <label className="block text-[10px] font-bold text-teal-950 dark:text-teal-200 mb-0.5">
-                                  Diagnosis Year
-                                </label>
-                                <select
-                                  value={selectedItem.onsetDate || "N/A"}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setSelectedConditions((prev) =>
-                                      prev.map((c) => (c.name === cond.name ? { ...c, onsetDate: val } : c))
-                                    );
-                                  }}
-                                  className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-teal-300 dark:border-teal-700 font-medium"
-                                >
-                                  <option value="N/A">I don't know</option>
-                                  {HISTORICAL_YEARS.map((y) => (
-                                    <option key={y} value={y}>
-                                      {y}
-                                    </option>
-                                  ))}
-                                </select>
-                              </div>
-                              <div>
-                                <label className="block text-[10px] font-bold text-teal-950 dark:text-teal-200 mb-0.5">
-                                  Clinician / Hospital
-                                </label>
-                                <input
-                                  type="text"
-                                  value={selectedItem.provider || ""}
-                                  onChange={(e) => {
-                                    const val = e.target.value;
-                                    setSelectedConditions((prev) =>
-                                      prev.map((c) => (c.name === cond.name ? { ...c, provider: val } : c))
-                                    );
-                                  }}
-                                  placeholder="e.g. Dr. Adams / Mass General"
-                                  className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-teal-300 dark:border-teal-700"
-                                />
+                            <div className="mt-2.5 pt-2.5 border-t border-teal-200/60 dark:border-teal-800/60 space-y-2">
+                              {isConditionWithLaterality(cond.name) && (
+                                <div>
+                                  <label className="block text-[10px] font-bold text-teal-950 dark:text-teal-200 mb-1">
+                                    Laterality (Side)
+                                  </label>
+                                  <div className="grid grid-cols-3 gap-1">
+                                    {["Right", "Left", "Bilateral"].map((side) => (
+                                      <button
+                                        key={side}
+                                        type="button"
+                                        onClick={() => {
+                                          setSelectedConditions((prev) =>
+                                            prev.map((c) => (c.name === cond.name ? { ...c, laterality: side } : c))
+                                          );
+                                        }}
+                                        className={`py-1 text-[11px] font-bold rounded border transition-colors ${
+                                          (selectedItem.laterality || "Right") === side
+                                            ? "bg-teal-700 text-white border-teal-700 shadow-2xs"
+                                            : "bg-white dark:bg-slate-900 text-slate-700 dark:text-slate-300 border-slate-200 dark:border-slate-700 hover:bg-slate-100"
+                                        }`}
+                                      >
+                                        {side}
+                                      </button>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="grid grid-cols-3 gap-2">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-teal-950 dark:text-teal-200 mb-0.5">
+                                    Diagnosis Year
+                                  </label>
+                                  <select
+                                    value={selectedItem.onsetDate || "N/A"}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setSelectedConditions((prev) =>
+                                        prev.map((c) => (c.name === cond.name ? { ...c, onsetDate: val } : c))
+                                      );
+                                    }}
+                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-teal-300 dark:border-teal-700 font-medium"
+                                  >
+                                    <option value="N/A">I don't know</option>
+                                    {HISTORICAL_YEARS.map((y) => (
+                                      <option key={y} value={y}>
+                                        {y}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-teal-950 dark:text-teal-200 mb-0.5">
+                                    Diagnosing Clinician
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={selectedItem.provider || ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setSelectedConditions((prev) =>
+                                        prev.map((c) => (c.name === cond.name ? { ...c, provider: val } : c))
+                                      );
+                                    }}
+                                    placeholder="e.g. Dr. Adams"
+                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-teal-300 dark:border-teal-700"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-teal-950 dark:text-teal-200 mb-0.5">
+                                    Hospital / Facility
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={selectedItem.facility || ""}
+                                    onChange={(e) => {
+                                      const val = e.target.value;
+                                      setSelectedConditions((prev) =>
+                                        prev.map((c) => (c.name === cond.name ? { ...c, facility: val } : c))
+                                      );
+                                    }}
+                                    placeholder="e.g. Mass General"
+                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-teal-300 dark:border-teal-700"
+                                  />
+                                </div>
                               </div>
                             </div>
                           )}
@@ -1792,16 +2475,28 @@ export function PatientOnboardingModal({
                         </div>
                       </div>
 
-                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3 pt-1">
                         <div>
                           <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            Surgeon & Hospital / Facility
+                            Performing Surgeon
+                          </label>
+                          <input
+                            type="text"
+                            value={customSurg.surgeon || ""}
+                            onChange={(e) => setCustomSurg((s) => ({ ...s, surgeon: e.target.value }))}
+                            placeholder="e.g. Dr. Sterling"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Surgical Hospital / Facility
                           </label>
                           <input
                             type="text"
                             value={customSurg.hospital}
                             onChange={(e) => setCustomSurg((s) => ({ ...s, hospital: e.target.value }))}
-                            placeholder="e.g. Dr. Sterling / New England Orthopedic"
+                            placeholder="e.g. New England Orthopedic"
                             className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
                           />
                         </div>
@@ -1813,7 +2508,7 @@ export function PatientOnboardingModal({
                             type="text"
                             value={customSurg.hardwareNotes}
                             onChange={(e) => setCustomSurg((s) => ({ ...s, hardwareNotes: e.target.value }))}
-                            placeholder="e.g. Titanium stem, cross-linked polyethylene"
+                            placeholder="e.g. Titanium stem, polyethylene"
                             className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
                           />
                         </div>
@@ -1928,7 +2623,7 @@ export function PatientOnboardingModal({
                                 </div>
                               )}
 
-                              <div className="grid grid-cols-2 gap-2">
+                              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                 <div>
                                   <div className="flex items-center justify-between mb-0.5">
                                     <label className="block text-[10px] font-bold text-indigo-950 dark:text-indigo-200">
@@ -1973,13 +2668,25 @@ export function PatientOnboardingModal({
                                 </div>
                                 <div>
                                   <label className="block text-[10px] font-bold text-indigo-950 dark:text-indigo-200 mb-0.5">
-                                    Surgeon / Hospital
+                                    Performing Surgeon
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={selectedItem.surgeon || ""}
+                                    onChange={(e) => handleUpdateSurgeryField(selectedItem.id, "surgeon", e.target.value)}
+                                    placeholder="e.g. Dr. Sterling"
+                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-700"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-indigo-950 dark:text-indigo-200 mb-0.5">
+                                    Hospital / Facility
                                   </label>
                                   <input
                                     type="text"
                                     value={selectedItem.hospital || ""}
                                     onChange={(e) => handleUpdateSurgeryField(selectedItem.id, "hospital", e.target.value)}
-                                    placeholder="e.g. Mass General / Dr. Sterling"
+                                    placeholder="e.g. Mass General Hospital"
                                     className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-700"
                                   />
                                 </div>
@@ -2069,6 +2776,55 @@ export function PatientOnboardingModal({
                           className="w-full pl-9 pr-4 py-2 text-xs border rounded-xl bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 focus:outline-hidden focus:ring-2 focus:ring-amber-500 font-medium"
                         />
                       </div>
+
+                      {/* NIH RxNorm Live Drug Autocompletions */}
+                      {medSearch.trim().length >= 2 && (
+                        <div className="p-3 rounded-xl border bg-amber-50/70 dark:bg-amber-950/30 border-amber-300 dark:border-amber-700/80 space-y-2">
+                          <div className="flex items-center justify-between text-[11px] font-bold text-amber-950 dark:text-amber-200 px-1">
+                            <span className="flex items-center gap-1.5">
+                              <Pill className="w-3.5 h-3.5 text-amber-600" />
+                              <span>NIH RxNorm Standardized Formulations</span>
+                            </span>
+                            {isSearchingRxNorm ? (
+                              <span className="text-[10px] text-amber-600 animate-pulse">Searching RxNorm...</span>
+                            ) : (
+                              <span className="text-[10px] text-amber-600 font-mono">{rxnormResults.length} matches</span>
+                            )}
+                          </div>
+
+                          {rxnormResults.length > 0 ? (
+                            <div className="space-y-1.5 max-h-48 overflow-y-auto pr-1">
+                              {rxnormResults.map((item) => {
+                                const isSelected = selectedMeds.some((m) => m.name.toLowerCase() === item.name.toLowerCase());
+                                return (
+                                  <button
+                                    key={item.rxcui}
+                                    type="button"
+                                    onClick={() => toggleMedicationItem(item.name, item.rxcui)}
+                                    className={`w-full p-2 rounded-lg border text-left text-xs transition-all flex items-center justify-between gap-1.5 ${
+                                      isSelected
+                                        ? "bg-amber-700 text-white border-amber-700 font-bold shadow-2xs"
+                                        : "bg-white dark:bg-slate-900 border-amber-200 dark:border-amber-800 text-slate-800 dark:text-slate-200 hover:border-amber-400 hover:bg-amber-50/50"
+                                    }`}
+                                  >
+                                    <div className="min-w-0 flex-1">
+                                      <div className="font-bold truncate text-[11px]">{item.name}</div>
+                                      <div className="text-[10px] opacity-75 font-mono">
+                                        RxCUI: {item.rxcui} {item.synonym && `• ${item.synonym}`}
+                                      </div>
+                                    </div>
+                                    <span className="text-xs font-bold shrink-0">{isSelected ? "✓" : "+"}</span>
+                                  </button>
+                                );
+                              })}
+                            </div>
+                          ) : !isSearchingRxNorm && (
+                            <div className="text-[11px] text-slate-500 italic px-1">
+                              No standardized RxNorm drugs found for "{medSearch}". You can use "Add Other Medication".
+                            </div>
+                          )}
+                        </div>
+                      )}
 
                       <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/40 p-2 max-h-[460px] overflow-y-auto pr-1">
                         <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2 px-1 flex items-center justify-between">
@@ -2290,6 +3046,87 @@ export function PatientOnboardingModal({
                                   className="w-full px-2.5 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
                                 />
                               )}
+
+                              {/* Dispensing History & Pharmacy Breakdown */}
+                              <div className="mt-2 pt-2 border-t border-slate-100 dark:border-slate-800 bg-amber-50/40 dark:bg-amber-950/20 p-2.5 rounded-lg space-y-2">
+                                <div className="text-[10px] font-bold uppercase tracking-wider text-amber-900 dark:text-amber-300 flex items-center justify-between">
+                                  <span>Dispensing History & Pharmacy Details</span>
+                                  <span className="text-[10px] font-normal text-slate-500">Rx details for clinical reconciliation</span>
+                                </div>
+                                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                      Last Picked Up Date
+                                    </label>
+                                    <input
+                                      type="date"
+                                      value={med.lastPickedUpDate || ""}
+                                      onChange={(e) => handleUpdateMedicationField(med.id, "lastPickedUpDate", e.target.value)}
+                                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                      Dispensing Pharmacy
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={med.lastPickedUpPharmacy || ""}
+                                      onChange={(e) => handleUpdateMedicationField(med.id, "lastPickedUpPharmacy", e.target.value)}
+                                      placeholder="e.g. CVS #04821"
+                                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                      Rx Number
+                                    </label>
+                                    <input
+                                      type="text"
+                                      value={med.rxNumber || ""}
+                                      onChange={(e) => handleUpdateMedicationField(med.id, "rxNumber", e.target.value)}
+                                      placeholder="e.g. RX-648102"
+                                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 font-mono"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                      Days Supply
+                                    </label>
+                                    <input
+                                      type="number"
+                                      value={med.daysSupply || ""}
+                                      onChange={(e) => handleUpdateMedicationField(med.id, "daysSupply", e.target.value)}
+                                      placeholder="e.g. 30, 90"
+                                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                      Quantity / Amount
+                                    </label>
+                                    <input
+                                      type="number"
+                                      value={med.quantityAmount || ""}
+                                      onChange={(e) => handleUpdateMedicationField(med.id, "quantityAmount", e.target.value)}
+                                      placeholder="e.g. 30, 60"
+                                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                                    />
+                                  </div>
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                      Refills Remaining
+                                    </label>
+                                    <input
+                                      type="number"
+                                      value={med.refillsRemaining ?? ""}
+                                      onChange={(e) => handleUpdateMedicationField(med.id, "refillsRemaining", e.target.value)}
+                                      placeholder="e.g. 2"
+                                      className="w-full px-2 py-1 text-xs border rounded bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                                    />
+                                  </div>
+                                </div>
+                              </div>
                             </div>
                           ))}
                         </div>
@@ -2376,28 +3213,41 @@ export function PatientOnboardingModal({
                       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
                         <div>
                           <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            Physician & Facility
+                            Performing Physician
                           </label>
                           <input
                             type="text"
-                            value={customProc.facility}
-                            onChange={(e) => setCustomProc((p) => ({ ...p, facility: e.target.value }))}
-                            placeholder="e.g. Dr. Patel / Metro Endoscopy Center"
+                            value={customProc.physician}
+                            onChange={(e) => setCustomProc((p) => ({ ...p, physician: e.target.value }))}
+                            placeholder="e.g. Dr. Patel"
                             className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
                           />
                         </div>
                         <div>
                           <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            Findings / Results Summary
+                            Diagnostic Facility / Hospital
                           </label>
                           <input
                             type="text"
-                            value={customProc.findings}
-                            onChange={(e) => setCustomProc((p) => ({ ...p, findings: e.target.value }))}
-                            placeholder="e.g. Unremarkable study without focal abnormalities."
+                            value={customProc.facility}
+                            onChange={(e) => setCustomProc((p) => ({ ...p, facility: e.target.value }))}
+                            placeholder="e.g. Metro Endoscopy Center"
                             className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
                           />
                         </div>
+                      </div>
+
+                      <div>
+                        <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                          Findings / Results Summary <span className="text-rose-500">* (Required)</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={customProc.findings}
+                          onChange={(e) => setCustomProc((p) => ({ ...p, findings: e.target.value }))}
+                          placeholder="Document biopsy or imaging findings (Required)..."
+                          className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                        />
                       </div>
 
                       <div className="flex justify-end pt-1">
@@ -2482,29 +3332,52 @@ export function PatientOnboardingModal({
                                 </div>
                               </div>
 
-                              <div>
-                                <label className="block text-[10px] font-bold text-sky-950 dark:text-sky-200 mb-0.5">
-                                  Performing Physician / Facility
-                                </label>
-                                <input
-                                  type="text"
-                                  value={selectedItem.institution || ""}
-                                  onChange={(e) => handleUpdateProcedureField(selectedItem.id, "institution", e.target.value)}
-                                  placeholder="e.g. Endoscopy Center / Dr. Patel"
-                                  className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-700"
-                                />
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-sky-950 dark:text-sky-200 mb-0.5">
+                                    Performing Physician
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={selectedItem.performing_clinician || ""}
+                                    onChange={(e) => handleUpdateProcedureField(selectedItem.id, "performing_clinician", e.target.value)}
+                                    placeholder="e.g. Dr. Patel"
+                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-700"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-sky-950 dark:text-sky-200 mb-0.5">
+                                    Diagnostic Facility / Hospital
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={selectedItem.institution || ""}
+                                    onChange={(e) => handleUpdateProcedureField(selectedItem.id, "institution", e.target.value)}
+                                    placeholder="e.g. Endoscopy Center"
+                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-700"
+                                  />
+                                </div>
                               </div>
 
                               <div>
-                                <label className="block text-[10px] font-bold text-sky-950 dark:text-sky-200 mb-0.5">
-                                  Findings / Results Summary
-                                </label>
+                                <div className="flex items-center justify-between mb-0.5">
+                                  <label className="block text-[10px] font-bold text-sky-950 dark:text-sky-200">
+                                    Findings / Results Summary <span className="text-rose-500">* (Required)</span>
+                                  </label>
+                                  {!selectedItem.findings?.trim() && (
+                                    <span className="text-[10px] text-rose-500 font-bold">Required to proceed</span>
+                                  )}
+                                </div>
                                 <textarea
                                   rows={2}
                                   value={selectedItem.findings || ""}
                                   onChange={(e) => handleUpdateProcedureField(selectedItem.id, "findings", e.target.value)}
-                                  placeholder="Document key biopsy or imaging results..."
-                                  className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-700 resize-none"
+                                  placeholder="Document key biopsy or imaging results (e.g. Normal screening, Benign polyp removed at hepatic flexure)..."
+                                  className={`w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 resize-none ${
+                                    !selectedItem.findings?.trim()
+                                      ? "border-rose-400 focus:border-rose-500 focus:ring-1 focus:ring-rose-500"
+                                      : "border-sky-300 dark:border-sky-700"
+                                  }`}
                                 />
                               </div>
                             </div>
@@ -2679,15 +3552,280 @@ export function PatientOnboardingModal({
                                   type="text"
                                   value={selectedItem.administering_facility || ""}
                                   onChange={(e) => handleUpdateVaccineField(selectedItem.id, "administering_facility", e.target.value)}
-                                  placeholder="e.g. CVS Pharmacy #04821 / Mass General Clinic"
+                                  placeholder="e.g. CVS Pharmacy #04821"
                                   className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-700"
                                 />
                               </div>
+
+                              {/* CDC Standard Status Badge */}
+                              {(() => {
+                                const statusInfo = evaluateVaccineStatus(
+                                  vax.name,
+                                  selectedItem.date_administered,
+                                  calculateAge(dob),
+                                  selectedItem.dose_number
+                                );
+                                return (
+                                  <div className="flex items-center justify-between pt-1">
+                                    <span className="text-[10px] font-mono text-slate-500 dark:text-slate-400">
+                                      CDC CVX: {vax.cvx || "Standard"}
+                                    </span>
+                                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${statusInfo.badgeColor}`}>
+                                      {statusInfo.label}
+                                    </span>
+                                  </div>
+                                );
+                              })()}
                             </div>
                           )}
                         </div>
                       );
                     })}
+                  </div>
+                </div>
+              )}
+
+              {/* -------------------------------------------------------------
+                  STEP 7: REVIEW & CONFIRMATION
+              ------------------------------------------------------------- */}
+              {wizardStep === 7 && (
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <CheckCircle2 className="w-4 h-4 text-teal-600" />
+                      <span>Step 7: Clinical Review & Intake Confirmation</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-0.5">
+                      Review all entered health information before committing data to your 3D anatomical avatar and profile.
+                    </p>
+                  </div>
+
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Patient Identification Card */}
+                    <div className="p-4 rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50/60 dark:bg-slate-800/40 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-slate-900 dark:text-white uppercase tracking-wider">
+                          Patient Demographics
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setWizardStep(1)}
+                          className="text-[11px] text-teal-700 dark:text-teal-400 font-bold hover:underline"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      <div className="text-xs text-slate-700 dark:text-slate-300 space-y-1">
+                        <div>
+                          <strong>Name:</strong> {`${firstName} ${lastName}`.trim() || "Not entered"}
+                        </div>
+                        <div>
+                          <strong>DOB / Age:</strong> {dob || "Not entered"} ({calculateAge(dob)} yo) • <strong>Sex:</strong> {sex} {sex === "other" && otherSexSpecification ? `(${otherSexSpecification})` : ""}
+                        </div>
+                        <div>
+                          <strong>Veteran Status:</strong> {veteranStatus === "Yes" ? "Yes (U.S. Military Veteran)" : "No"} • <strong>Blood Type:</strong> {bloodType}
+                        </div>
+                        <div>
+                          <strong>Phone:</strong> {phone || "Not entered"} • <strong>Email:</strong> {email || "Not entered"}
+                        </div>
+                        <div>
+                          <strong>Address:</strong> {address || "Not entered"}
+                        </div>
+                        <div>
+                          <strong>Emergency Contact:</strong> {`${emergencyContactFirstName} ${emergencyContactLastName}`.trim() || "None"} ({emergencyContactRelation}) • {emergencyContactPhone || "No phone"}
+                        </div>
+                        <div>
+                          <strong>Care Team (PCP):</strong> {pcpName || "None assigned"} {pcpClinic ? `at ${pcpClinic}` : ""} {pcpPhone ? `(${pcpPhone})` : ""}
+                        </div>
+                        <div>
+                          <strong>Preferred Pharmacy:</strong> {pharmacyName || "None documented"} {pharmacyAddress ? `(${pharmacyAddress})` : ""}
+                        </div>
+                      </div>
+                    </div>
+
+                    {/* Allergies Card */}
+                    <div className="p-4 rounded-xl border border-rose-200 dark:border-rose-900/40 bg-rose-50/30 dark:bg-rose-950/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-rose-900 dark:text-rose-300 uppercase tracking-wider">
+                          Documented Allergies
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setWizardStep(1)}
+                          className="text-[11px] text-rose-700 dark:text-rose-400 font-bold hover:underline"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      {isNkda ? (
+                        <div className="text-xs font-semibold text-emerald-700 dark:text-emerald-400">
+                          ✓ No Known Drug Allergies (NKDA)
+                        </div>
+                      ) : (
+                        <div className="space-y-1 max-h-36 overflow-y-auto pr-1">
+                          {allergiesList.filter((a) => a.drugName.trim()).length === 0 ? (
+                            <div className="text-xs text-slate-500">No allergies documented.</div>
+                          ) : (
+                            allergiesList
+                              .filter((a) => a.drugName.trim())
+                              .map((a) => (
+                                <div key={a.id} className="text-xs text-rose-800 dark:text-rose-300">
+                                  • <strong>{a.drugName}</strong>: {a.reactionType} {a.approximateDate ? `(${a.approximateDate})` : ""}
+                                </div>
+                              ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Conditions & Surgeries Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    {/* Conditions */}
+                    <div className="p-4 rounded-xl border border-teal-200 dark:border-teal-900/40 bg-teal-50/30 dark:bg-teal-950/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-teal-900 dark:text-teal-300 uppercase tracking-wider">
+                          Medical Conditions ({selectedConditions.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setWizardStep(2)}
+                          className="text-[11px] text-teal-700 dark:text-teal-400 font-bold hover:underline"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {selectedConditions.length === 0 ? (
+                          <div className="text-xs text-slate-500">No medical conditions selected.</div>
+                        ) : (
+                          selectedConditions.map((c) => (
+                            <div key={c.id || c.name} className="text-xs text-slate-700 dark:text-slate-300">
+                              • <strong>{c.name}</strong> {c.laterality ? `[${c.laterality}]` : ""} {c.onsetDate && c.onsetDate !== "N/A" ? `(Dx: ${c.onsetDate})` : ""}
+                              {c.provider ? ` — ${c.provider}` : ""} {c.facility ? `@ ${c.facility}` : ""}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Surgeries */}
+                    <div className="p-4 rounded-xl border border-indigo-200 dark:border-indigo-900/40 bg-indigo-50/30 dark:bg-indigo-950/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-indigo-900 dark:text-indigo-300 uppercase tracking-wider">
+                          Past Surgeries ({selectedSurgeries.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setWizardStep(3)}
+                          className="text-[11px] text-indigo-700 dark:text-indigo-400 font-bold hover:underline"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {selectedSurgeries.length === 0 ? (
+                          <div className="text-xs text-slate-500">No past surgeries selected.</div>
+                        ) : (
+                          selectedSurgeries.map((s) => (
+                            <div key={s.id || s.name} className="text-xs text-slate-700 dark:text-slate-300">
+                              • <strong>{s.name}</strong> {s.laterality ? `[${s.laterality}]` : ""} {s.surgeryDate && s.surgeryDate !== "N/A" ? `(${s.surgeryDate})` : ""}
+                              {s.surgeon ? ` — Dr. ${s.surgeon.replace(/^Dr\.\s*/i, '')}` : ""} {s.hospital ? `@ ${s.hospital}` : ""}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Medications, Procedures & Vaccines */}
+                  <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+                    {/* Medications */}
+                    <div className="p-4 rounded-xl border border-amber-200 dark:border-amber-900/40 bg-amber-50/30 dark:bg-amber-950/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-amber-900 dark:text-amber-300 uppercase tracking-wider">
+                          Medications ({selectedMeds.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setWizardStep(4)}
+                          className="text-[11px] text-amber-700 dark:text-amber-400 font-bold hover:underline"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {selectedMeds.length === 0 ? (
+                          <div className="text-xs text-slate-500">No medications selected.</div>
+                        ) : (
+                          selectedMeds.map((m) => (
+                            <div key={m.id || m.name} className="text-xs text-slate-700 dark:text-slate-300">
+                              • <strong>{m.name}</strong> {m.dosage} ({m.frequency})
+                              {m.daysSupply ? ` [${m.daysSupply}d supply]` : ""}
+                              {m.lastPickedUpPharmacy ? ` @ ${m.lastPickedUpPharmacy}` : ""}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Procedures */}
+                    <div className="p-4 rounded-xl border border-sky-200 dark:border-sky-900/40 bg-sky-50/30 dark:bg-sky-950/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-sky-900 dark:text-sky-300 uppercase tracking-wider">
+                          Procedures ({selectedProcedures.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setWizardStep(5)}
+                          className="text-[11px] text-sky-700 dark:text-sky-400 font-bold hover:underline"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {selectedProcedures.length === 0 ? (
+                          <div className="text-xs text-slate-500">No procedures recorded.</div>
+                        ) : (
+                          selectedProcedures.map((p) => (
+                            <div key={p.id || p.procedure_name} className="text-xs text-slate-700 dark:text-slate-300">
+                              • <strong>{p.procedure_name || p.plainName}</strong> ({p.date_performed || "Date unk"})
+                              <div className="text-[11px] text-slate-500 italic pl-2">
+                                Findings: {p.findings || "None documented"}
+                              </div>
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
+
+                    {/* Vaccines */}
+                    <div className="p-4 rounded-xl border border-emerald-200 dark:border-emerald-900/40 bg-emerald-50/30 dark:bg-emerald-950/20 space-y-2">
+                      <div className="flex items-center justify-between">
+                        <span className="text-xs font-bold text-emerald-900 dark:text-emerald-300 uppercase tracking-wider">
+                          Vaccines ({selectedVaccines.length})
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => setWizardStep(6)}
+                          className="text-[11px] text-emerald-700 dark:text-emerald-400 font-bold hover:underline"
+                        >
+                          Edit
+                        </button>
+                      </div>
+                      <div className="space-y-1.5 max-h-40 overflow-y-auto pr-1">
+                        {selectedVaccines.length === 0 ? (
+                          <div className="text-xs text-slate-500">No vaccines recorded.</div>
+                        ) : (
+                          selectedVaccines.map((v) => (
+                            <div key={v.id || v.vaccine_name} className="text-xs text-slate-700 dark:text-slate-300">
+                              • <strong>{v.vaccine_name || v.plainName}</strong> ({v.date_administered || "Date unk"})
+                              {v.administering_facility ? ` @ ${v.administering_facility}` : ""}
+                            </div>
+                          ))
+                        )}
+                      </div>
+                    </div>
                   </div>
                 </div>
               )}
@@ -2926,16 +4064,18 @@ export function PatientOnboardingModal({
 
               <div className="flex items-center gap-3">
                 <span className="text-xs text-slate-500 hidden sm:inline">
-                  Step {wizardStep} of 6
+                  Step {wizardStep} of 7
                 </span>
 
-                {wizardStep < 6 ? (
+                {wizardStep < 7 ? (
                   <button
                     type="button"
-                    onClick={() => setWizardStep((s) => s + 1)}
+                    onClick={handleStepForward}
                     className="flex items-center gap-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold px-5 py-2 rounded-xl shadow-md transition-all hover:translate-x-0.5"
                   >
-                    <span>Next: {wizardStep === 1 ? "Conditions" : wizardStep === 2 ? "Surgeries" : wizardStep === 3 ? "Medications" : wizardStep === 4 ? "Procedures" : "Vaccines"}</span>
+                    <span>
+                      Next: {wizardStep === 1 ? "Conditions" : wizardStep === 2 ? "Surgeries" : wizardStep === 3 ? "Medications" : wizardStep === 4 ? "Procedures" : wizardStep === 5 ? "Vaccines" : "Review & Confirm"}
+                    </span>
                     <ArrowRight className="w-4 h-4" />
                   </button>
                 ) : (
