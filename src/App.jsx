@@ -86,7 +86,6 @@ export default function App() {
   const handleSignOut = async () => {
     localStorage.removeItem("pmhx_demo_mode");
     setIsDemoMode(false);
-    resetToDefault();
     if (user) {
       await supabase.auth.signOut();
     }

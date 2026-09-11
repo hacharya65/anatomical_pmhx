@@ -122,16 +122,6 @@ export function usePatientData() {
       const procsData = procsRes.status === "fulfilled" && !procsRes.value.error ? (procsRes.value.data || []) : null;
       const vaxData = vaxRes.status === "fulfilled" && !vaxRes.value.error ? (vaxRes.value.data || []) : null;
 
-      // Calculate total records to detect onboarding requirement
-      const totalRecords =
-        (condsData?.length || 0) +
-        (surgsData?.length || 0) +
-        (medsData?.length || 0) +
-        (procsData?.length || 0) +
-        (vaxData?.length || 0);
-
-      const isFirstTime = totalRecords === 0 && !profileData?.dob;
-      setIsNewPatient(isFirstTime);
 
       // Conditions: map DB snake_case to camelCase
       const newConditions = condsData !== null
@@ -277,16 +267,65 @@ export function usePatientData() {
         });
       }
 
+      // Offline-first safety: retrieve local cached data first
+      let localCached = null;
+      try {
+        const stored = localStorage.getItem(getUserStorageKey(userId));
+        if (stored) {
+          localCached = JSON.parse(stored);
+        }
+      } catch (_) {}
+
+      // Preserve local cached records if remote returned empty or errored
+      const finalConditions = (newConditions.length > 0)
+        ? newConditions
+        : (localCached?.conditions?.length > 0 ? localCached.conditions : []);
+
+      const finalSurgeries = (newSurgeries.length > 0)
+        ? newSurgeries
+        : (localCached?.surgeries?.length > 0 ? localCached.surgeries : []);
+
+      const finalMedications = (newMedications.length > 0)
+        ? newMedications
+        : (localCached?.medications?.length > 0 ? localCached.medications : []);
+
+      const finalProcedures = (newProcedures.length > 0)
+        ? newProcedures
+        : (localCached?.procedures?.length > 0 ? localCached.procedures : []);
+
+      const finalVaccinations = (newVaccinations.length > 0)
+        ? newVaccinations
+        : (localCached?.vaccinations?.length > 0 ? localCached.vaccinations : []);
+
+      const finalAllergies = (derivedAllergiesList.length > 0)
+        ? derivedAllergiesList
+        : (localCached?.allergiesList?.length > 0 ? localCached.allergiesList : []);
+
+      const hasRemoteProfile = profileData && (profileData.name !== "Patient" || profileData.dob || profileData.mrn);
+      const finalProfile = hasRemoteProfile
+        ? newProfile
+        : (localCached?.profile?.name && localCached.profile.name !== "Patient" ? { ...newProfile, ...localCached.profile } : newProfile);
+
+      const totalRecords =
+        finalConditions.length +
+        finalSurgeries.length +
+        finalMedications.length +
+        finalProcedures.length +
+        finalVaccinations.length;
+
+      const isFirstTime = totalRecords === 0 && !finalProfile?.dob;
+      setIsNewPatient(isFirstTime);
+
       const nextPatientData = {
-        profile: newProfile,
-        conditions: newConditions,
-        surgeries: newSurgeries,
-        medications: newMedications,
-        procedures: newProcedures,
-        vaccinations: newVaccinations,
-        drains: [],
-        lines: [],
-        allergiesList: derivedAllergiesList
+        profile: finalProfile,
+        conditions: finalConditions,
+        surgeries: finalSurgeries,
+        medications: finalMedications,
+        procedures: finalProcedures,
+        vaccinations: finalVaccinations,
+        drains: localCached?.drains || [],
+        lines: localCached?.lines || [],
+        allergiesList: finalAllergies
       };
 
       setPatientData(nextPatientData);
@@ -295,6 +334,105 @@ export function usePatientData() {
       } catch (_) {}
       lastFetchedUserIdRef.current = userId;
       setSyncStatus("synced");
+
+      // Background synchronization: If local cache had data that remote lacked, back it up to Supabase
+      if (
+        (condsData?.length === 0 && finalConditions.length > 0) ||
+        (surgsData?.length === 0 && finalSurgeries.length > 0) ||
+        (medsData?.length === 0 && finalMedications.length > 0)
+      ) {
+        supabase.from("patient_profile").upsert({
+          user_id: userId,
+          name: finalProfile.name || "Patient",
+          dob: finalProfile.dob || null,
+          age: finalProfile.age ? Number(finalProfile.age) : null,
+          sex: finalProfile.sex || "female",
+          build: finalProfile.build || "medium",
+          skin_tone: finalProfile.skinTone || "#d4a373",
+          mrn: finalProfile.mrn || null,
+          phone: finalProfile.phone || null,
+          email: finalProfile.email || null,
+          address: finalProfile.address || null,
+          veteran_status: finalProfile.veteranStatus || "No",
+          preferred_language: finalProfile.preferredLanguage || "English",
+          blood_type: finalProfile.bloodType || null,
+          pcp: finalProfile.pcp || null,
+          pcp_phone: finalProfile.pcpPhone || null,
+          clinic: finalProfile.clinic || null,
+          emergency_contact: finalProfile.emergencyContact || null,
+          emergency_contact_first_name: finalProfile.emergencyContactFirstName || null,
+          emergency_contact_last_name: finalProfile.emergencyContactLastName || null,
+          emergency_contact_name: finalProfile.emergencyContactName || null,
+          emergency_contact_relation: finalProfile.emergencyContactRelation || null,
+          emergency_contact_phone: finalProfile.emergencyContactPhone || null,
+          allergies: finalProfile.allergies || null,
+          pharmacy: finalProfile.pharmacy || null,
+          updated_at: new Date().toISOString()
+        }, { onConflict: "user_id" }).catch(() => {});
+
+        if (finalConditions.length > 0) {
+          supabase.from("patient_conditions").upsert(
+            finalConditions.map(c => ({
+              id: c.id || `cond-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              user_id: userId,
+              name: c.name,
+              region: c.region || "General",
+              icd10: c.icd10 || null,
+              onset_date: c.onsetDate || c.onset_date || null,
+              status: c.status || "Active",
+              provider: c.provider || null,
+              facility: c.facility || null,
+              laterality: c.laterality || null,
+              coords: c.coords || { x: 0, y: 3.5, z: 1.0 },
+              system: c.system || "general",
+              notes: c.notes || null
+            }))
+          ).catch(() => {});
+        }
+
+        if (finalSurgeries.length > 0) {
+          supabase.from("patient_surgeries").upsert(
+            finalSurgeries.map(s => ({
+              id: s.id || `surg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              user_id: userId,
+              name: s.name,
+              site: s.site || "General",
+              surgery_date: s.surgeryDate || s.surgery_date || null,
+              hospital: s.hospital || null,
+              surgeon: s.surgeon || null,
+              incision: s.incision || null,
+              coords: s.coords || { x: 0, y: 3.0, z: 1.0 },
+              system: s.system || "general",
+              notes: s.notes || null
+            }))
+          ).catch(() => {});
+        }
+
+        if (finalMedications.length > 0) {
+          supabase.from("patient_medications").upsert(
+            finalMedications.map(m => ({
+              id: m.id || `med-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              user_id: userId,
+              name: m.name,
+              dosage: m.dosage || "Standard Dose",
+              route: m.route || "Oral (PO)",
+              frequency: m.frequency || "Once Daily",
+              indication: m.indication || "",
+              start_date: m.startDate || m.start_date || null,
+              prescriber: m.prescriber || null,
+              facility: m.facility || null,
+              days_supply: m.daysSupply !== undefined && m.daysSupply !== null ? String(m.daysSupply) : null,
+              last_picked_up_date: m.lastPickedUpDate || null,
+              last_picked_up_pharmacy: m.lastPickedUpPharmacy || null,
+              quantity_amount: m.quantityAmount !== undefined && m.quantityAmount !== null ? String(m.quantityAmount) : null,
+              refills_remaining: m.refillsRemaining !== undefined && m.refillsRemaining !== null ? Number(m.refillsRemaining) : 0,
+              rx_number: m.rxNumber || null,
+              system: m.system || "general",
+              notes: m.notes || null
+            }))
+          ).catch(() => {});
+        }
+      }
     } catch (e) {
       console.error("Remote data fetch failed:", e);
       setSyncStatus("error");
@@ -1114,7 +1252,8 @@ export function usePatientData() {
             system: c.system || "general",
             notes: c.notes || null
           }));
-          await supabase.from("patient_conditions").insert(rows);
+          const { error: condsErr } = await supabase.from("patient_conditions").insert(rows);
+          if (condsErr) console.error("patient_conditions insert error:", condsErr);
         }
 
         if (newSurgeries.length > 0) {
@@ -1149,7 +1288,8 @@ export function usePatientData() {
               notes: notes || null
             };
           });
-          await supabase.from("patient_surgeries").insert(rows);
+          const { error: surgsErr } = await supabase.from("patient_surgeries").insert(rows);
+          if (surgsErr) console.error("patient_surgeries insert error:", surgsErr);
         }
 
         if (newMedications.length > 0) {
@@ -1164,16 +1304,17 @@ export function usePatientData() {
             start_date: m.startDate || m.start_date || null,
             prescriber: m.prescriber || null,
             facility: m.facility || null,
-            days_supply: m.daysSupply !== undefined && m.daysSupply !== "" ? Number(m.daysSupply) : (m.days_supply !== undefined && m.days_supply !== "" ? Number(m.days_supply) : null),
+            days_supply: m.daysSupply !== undefined && m.daysSupply !== "" ? String(m.daysSupply) : (m.days_supply !== undefined && m.days_supply !== "" ? String(m.days_supply) : null),
             last_picked_up_date: m.lastPickedUpDate || m.last_picked_up_date || null,
             last_picked_up_pharmacy: m.lastPickedUpPharmacy || m.last_picked_up_pharmacy || null,
             quantity_amount: m.quantityAmount || m.quantity_amount || null,
-            refills_remaining: m.refillsRemaining !== undefined && m.refillsRemaining !== "" ? Number(m.refillsRemaining) : (m.refills_remaining !== undefined && m.refills_remaining !== "" ? Number(m.refills_remaining) : null),
+            refills_remaining: m.refillsRemaining !== undefined && m.refillsRemaining !== "" ? Number(m.refillsRemaining) : (m.refills_remaining !== undefined && m.refills_remaining !== "" ? Number(m.refills_remaining) : 0),
             rx_number: m.rxNumber || m.rx_number || null,
             system: m.system || "general",
             notes: m.notes || null
           }));
-          await supabase.from("patient_medications").insert(rows);
+          const { error: medsErr } = await supabase.from("patient_medications").insert(rows);
+          if (medsErr) console.error("patient_medications insert error:", medsErr);
         }
 
         if (newProcedures.length > 0) {
@@ -1191,7 +1332,8 @@ export function usePatientData() {
             coords: p.coords || { x: 0.1, y: 1.8, z: 1.05 },
             system: p.system || "general"
           }));
-          await supabase.from("patient_procedures").insert(rows);
+          const { error: procsErr } = await supabase.from("patient_procedures").insert(rows);
+          if (procsErr) console.error("patient_procedures insert error:", procsErr);
         }
 
         if (newVaccinations.length > 0) {
@@ -1205,7 +1347,8 @@ export function usePatientData() {
             lot_number: v.lot_number || v.lotNumber || null,
             next_due_date: v.next_due_date || v.nextDueDate || null
           }));
-          await supabase.from("patient_vaccinations").insert(rows);
+          const { error: vaxErr } = await supabase.from("patient_vaccinations").insert(rows);
+          if (vaxErr) console.error("patient_vaccinations insert error:", vaxErr);
         }
 
         setSyncStatus("synced");
