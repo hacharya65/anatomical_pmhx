@@ -553,6 +553,7 @@ export default function App() {
         onAddAllergy={addAllergy}
         onUpdateAllergy={updateAllergy}
         onDeleteAllergy={deleteAllergy}
+        onOpenOnboarding={() => setIsOnboardingOpen(true)}
       />
 
       <AuthModal

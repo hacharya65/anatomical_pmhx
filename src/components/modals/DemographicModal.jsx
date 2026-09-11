@@ -16,7 +16,9 @@ import {
   Check,
   ShieldCheck,
   Clock,
-  Pill
+  Pill,
+  Upload,
+  FileText
 } from "lucide-react";
 
 export function DemographicModal({
@@ -27,7 +29,8 @@ export function DemographicModal({
   onSaveProfile,
   onAddAllergy,
   onUpdateAllergy,
-  onDeleteAllergy
+  onDeleteAllergy,
+  onOpenOnboarding
 }) {
   const isLight = true;
 
@@ -1199,6 +1202,47 @@ export function DemographicModal({
                 No preferred pharmacy documented. Click "Edit Pharmacy" to record your dispensing location.
               </div>
             )}
+          </div>
+
+          {/* ================================================================= */}
+          {/* SECTION 5: HEALTH INTAKE & MEDICAL RECORDS IMPORT */}
+          {/* ================================================================= */}
+          <div
+            className={`p-5 rounded-2xl border transition-all ${
+              isLight
+                ? "bg-linear-to-r from-teal-50/70 via-slate-50 to-emerald-50/70 border-teal-200"
+                : "bg-slate-900/90 border-slate-800"
+            }`}
+          >
+            <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+              <div className="flex items-start gap-3">
+                <div className="p-2.5 rounded-xl bg-teal-100 text-teal-800 border border-teal-200 shrink-0">
+                  <Upload className="w-4 h-4 text-teal-700" />
+                </div>
+                <div>
+                  <h4 className="text-xs font-bold text-slate-900 dark:text-slate-100 flex items-center gap-1.5">
+                    <span>Patient Health Intake & Medical Records</span>
+                  </h4>
+                  <p className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5 max-w-md">
+                    Import clinical PDF summaries, upload digital records, or refill out the comprehensive 7-step guided intake wizard.
+                  </p>
+                </div>
+              </div>
+
+              {onOpenOnboarding && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    onClose();
+                    onOpenOnboarding();
+                  }}
+                  className="flex items-center justify-center gap-1.5 px-3.5 py-2 rounded-xl text-xs font-bold border shadow-xs transition-all shrink-0 bg-teal-700 text-white hover:bg-teal-800 border-teal-800 hover:shadow-md cursor-pointer"
+                >
+                  <Upload className="w-3.5 h-3.5" />
+                  <span>Import / Refill Intake Form</span>
+                </button>
+              )}
+            </div>
           </div>
         </div>
 

@@ -51,35 +51,28 @@ export function UnifiedSidebar({
     {
       key: "conditions",
       label: "Medical History",
-      lines: ["Medical", "History"],
-      count: filteredConditions.length
+      lines: ["Medical", "History"]
     },
     {
       key: "surgeries",
       label: "Surgical History",
-      lines: ["Surgical", "History"],
-      count: filteredSurgeries.length
+      lines: ["Surgical", "History"]
     },
-    { key: "medications", label: "Medications", lines: ["Medications"], count: filteredMedications.length },
+    { key: "medications", label: "Medications", lines: ["Medications"] },
     {
       key: "procedures",
       label: "Procedures",
-      lines: ["Procedures"],
-      count: filteredProcedures.length
+      lines: ["Procedures"]
     },
     {
       key: "vaccines",
       label: "Vaccines",
-      lines: ["Vaccines"],
-      count: filteredVaccinations.length
+      lines: ["Vaccines"]
     },
     {
       key: "lines_drains",
-      label: "Lines / Drains",
-      lines: ["Lines /", "Drains"],
-      count: filteredLines.length + filteredDrains.length,
-      linesCount: filteredLines.length,
-      drainsCount: filteredDrains.length
+      label: "Lines & Drains",
+      lines: ["Lines &", "Drains"]
     }
   ];
 
@@ -88,95 +81,30 @@ export function UnifiedSidebar({
       id="tour-unified-sidebar"
       className="w-full lg:w-[600px] xl:w-[640px] h-full flex flex-col border-l shadow-xl z-20 select-none bg-white border-slate-200 text-slate-800 transition-all"
     >
-      {/* 1. Unified Navigation Tabs across top of sidebar (Stacked titles to ensure 100% full visibility with zero cutoff) */}
-      <div id="tour-sidebar-tabs" className="border-b px-2 pt-1.5 min-h-[54px] flex items-stretch justify-between gap-1 bg-slate-50 border-slate-200">
-        <div className="flex items-stretch gap-1 flex-1 min-w-0">
+      {/* 1. Unified Navigation Tabs across top of sidebar */}
+      <div id="tour-sidebar-tabs" className="border-b px-2 pt-1.5 min-h-[52px] flex items-stretch justify-between gap-1 bg-slate-50 border-slate-200">
+        <div className="flex items-stretch gap-1.5 flex-1 min-w-0">
           {tabs.map((tab) => {
             const isActive = activeTab === tab.key;
-            const hasMatches = isSearching && tab.count > 0;
-            const isZeroMatches = isSearching && tab.count === 0 && tab.key !== "summary";
 
             return (
               <button
                 key={tab.key}
                 type="button"
                 onClick={() => onTabChange(tab.key)}
-                className={`flex-1 min-w-0 py-1.5 px-1.5 text-[11px] xl:text-xs font-semibold rounded-t-lg transition-all flex items-center justify-center gap-1.5 border-b-2 ${
+                className={`flex-1 min-w-0 py-2 px-1 text-[11px] xl:text-xs font-semibold rounded-t-lg transition-all flex items-center justify-center border-b-2 cursor-pointer select-none ${
                   isActive
-                    ? "text-teal-800 border-teal-700 bg-white shadow-xs font-bold"
-                    : isZeroMatches
-                    ? "text-slate-400 border-transparent opacity-60 hover:opacity-100 hover:text-slate-700 hover:bg-slate-100/60"
-                    : hasMatches
-                    ? "text-teal-700 border-transparent hover:bg-teal-50/60 font-semibold"
-                    : "text-slate-500 border-transparent hover:text-slate-800 hover:bg-slate-100/60"
+                    ? "text-teal-900 border-teal-700 bg-white shadow-xs font-bold"
+                    : "text-slate-600 border-transparent hover:text-teal-950 hover:bg-slate-200/75 hover:border-slate-300"
                 }`}
               >
-                <div className="flex flex-col items-center justify-center leading-[1.15] text-center shrink-0">
+                <div className="flex flex-col items-center justify-center leading-[1.2] text-center shrink-0">
                   {tab.lines.map((lineText, idx) => (
                     <span key={idx} className="whitespace-nowrap tracking-tight">
                       {lineText}
                     </span>
                   ))}
                 </div>
-
-                {/* Special grouped badge for Lines / Drains keeping individual colors and icons */}
-                {tab.key === "lines_drains" ? (
-                  <div className="flex flex-col xl:flex-row items-center gap-0.5 shrink-0 ml-0.5">
-                    {/* Line indicator: Green IV icon + count */}
-                    <span
-                      title={`${tab.linesCount} Active Vascular Lines`}
-                      className={`flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold border transition-colors ${
-                        isActive
-                          ? "bg-emerald-100 text-emerald-800 border-emerald-300"
-                          : "bg-emerald-50 text-emerald-700 border-emerald-200"
-                      }`}
-                    >
-                      <svg className="w-2.5 h-2.5 text-emerald-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M7 4h10v14a4 4 0 0 1-4 4h-2a4 4 0 0 1-4-4V4Z" />
-                        <path d="M10 2h4" />
-                        <path d="M12 11v6" />
-                        <path d="M9 14h6" />
-                      </svg>
-                      <span>{tab.linesCount}</span>
-                    </span>
-
-                    {/* Drain indicator: Pink drainage bulb icon + count */}
-                    <span
-                      title={`${tab.drainsCount} Active Surgical Drains`}
-                      className={`flex items-center gap-0.5 px-1.5 py-0.2 rounded-full text-[10px] font-bold border transition-colors ${
-                        isActive
-                          ? "bg-pink-100 text-pink-800 border-pink-300"
-                          : "bg-pink-50 text-pink-700 border-pink-200"
-                      }`}
-                    >
-                      <svg className="w-2.5 h-2.5 text-pink-600 shrink-0" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                        <path d="M12 2v6" />
-                        <circle cx="12" cy="14" r="6" />
-                        <path d="M12 11v4" />
-                        <path d="M10 13h4" />
-                      </svg>
-                      <span>{tab.drainsCount}</span>
-                    </span>
-                  </div>
-                ) : (
-                  tab.count !== undefined && (
-                    <span
-                      className={`text-[10.5px] px-1.5 py-0.2 rounded-full font-bold shrink-0 ml-0.5 transition-colors ${
-                        isActive
-                          ? hasMatches
-                            ? "bg-teal-700 text-white shadow-xs"
-                            : "bg-teal-100 text-teal-800"
-                          : hasMatches
-                          ? "bg-teal-600 text-white shadow-xs animate-pulse"
-                          : isZeroMatches
-                          ? "bg-slate-200 text-slate-400"
-                          : "bg-slate-200/80 text-slate-600"
-                      }`}
-                    >
-                      {tab.count}
-                    </span>
-                  )
-                )}
               </button>
             );
           })}
