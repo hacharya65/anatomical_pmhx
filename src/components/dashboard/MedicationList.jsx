@@ -105,7 +105,7 @@ export function MedicationList({
                 {/* Indication & Target System Link */}
                 <div className="mt-2 pt-2 border-t border-slate-100 flex items-center justify-between text-xs text-slate-500">
                   <span className="text-[11px] truncate max-w-[210px]">
-                    Health Reason / Why you take this: <strong className="text-slate-800">{med.indication || "Unspecified"}</strong>
+                    Indication: <strong className="text-slate-800">{med.indication || "Unspecified"}</strong>
                   </span>
                   {med.system && (
                     <span className="capitalize text-[10px] font-medium text-teal-800 bg-teal-50 border border-teal-200/80 px-1.5 py-0.5 rounded">

@@ -27,13 +27,14 @@ export function Avatar({
     let waistW = 0.88;
     let hipW = 0.82;
 
-    if (sex === "male") {
+    const normalizedSex = (sex || "").toLowerCase();
+    if (normalizedSex === "male") {
       shoulderW = 1.25;
       waistW = 0.96;
       hipW = 0.78;
-    } else if (sex === "neutral") {
-      shoulderW = 1.18;
-      waistW = 0.90;
+    } else if (normalizedSex === "other" || normalizedSex === "neutral") {
+      shoulderW = 1.20;
+      waistW = 0.92;
       hipW = 0.80;
     }
 
@@ -62,6 +63,8 @@ export function Avatar({
       side: THREE.DoubleSide
     });
   }, [skinTone, isDeepDive]);
+
+  const normalizedSex = (sex || "").toLowerCase();
 
   return (
     <group position={[0, 0, 0]}>
@@ -110,8 +113,8 @@ export function Avatar({
           <sphereGeometry args={[1.2, 36, 36]} />
         </mesh>
 
-        {/* Anatomical Breast Contours (Matching Epic reference screenshot) */}
-        {sex !== "male" && (
+        {/* Anatomical Breast Contours for Female */}
+        {normalizedSex === "female" && (
           <group position={[0, 4.65, 0.72 * morph.depth]}>
             {/* Left Breast (Viewer's Right, X > 0) */}
             <mesh position={[0.58 * morph.shoulderW, 0, 0]} scale={[0.54, 0.5, 0.52]} material={skinMaterial}>
@@ -120,6 +123,18 @@ export function Avatar({
             {/* Right Breast (Viewer's Left, X < 0) */}
             <mesh position={[-0.58 * morph.shoulderW, 0, 0]} scale={[0.54, 0.5, 0.52]} material={skinMaterial}>
               <sphereGeometry args={[0.76, 28, 28]} />
+            </mesh>
+          </group>
+        )}
+
+        {/* Balanced Androgynous / Neutral Baseline Contour for Other */}
+        {(normalizedSex === "other" || normalizedSex === "neutral") && (
+          <group position={[0, 4.65, 0.64 * morph.depth]}>
+            <mesh position={[0.56 * morph.shoulderW, 0, 0]} scale={[0.38, 0.3, 0.22]} material={skinMaterial}>
+              <sphereGeometry args={[0.72, 28, 28]} />
+            </mesh>
+            <mesh position={[-0.56 * morph.shoulderW, 0, 0]} scale={[0.38, 0.3, 0.22]} material={skinMaterial}>
+              <sphereGeometry args={[0.72, 28, 28]} />
             </mesh>
           </group>
         )}

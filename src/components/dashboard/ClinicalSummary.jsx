@@ -1,5 +1,6 @@
 import React from "react";
 import { Printer, FileText, Store } from "lucide-react";
+import { calculateAge } from "../../lib/clinicalCatalog";
 
 export function ClinicalSummary({ profile = {}, conditions = [], surgeries = [], medications = [] }) {
   const handlePrint = () => {
@@ -56,7 +57,7 @@ export function ClinicalSummary({ profile = {}, conditions = [], surgeries = [],
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-semibold tracking-wider">DOB / Age</span>
-              <strong className="text-slate-900 font-bold">{profile.dob || "1968-04-12"} ({profile.age || 58} yo)</strong>
+              <strong className="text-slate-900 font-bold">{profile.dob || "1968-04-12"} ({calculateAge(profile.dob, profile.age || 58)} yo)</strong>
             </div>
             <div>
               <span className="text-slate-500 block text-[10px] uppercase font-semibold tracking-wider">Medical Record #</span>

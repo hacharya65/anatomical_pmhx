@@ -314,10 +314,10 @@ export const CLINICAL_CATALOG = {
     },
     {
       id: "surg-tka-right",
-      name: "Total Knee Arthroplasty (Right)",
-      plainName: "Right Knee Joint Replacement",
-      site: "Right Anterior Knee Joint",
-      incision: "Midline anterior longitudinal right knee incision (15 cm)",
+      name: "Knee Arthroplasty / Joint Replacement",
+      plainName: "Knee Arthroplasty / Joint Replacement",
+      site: "Anterior Knee Joint",
+      incision: "Midline anterior longitudinal knee incision (15 cm)",
       coords: { x: -0.82, y: -4.55, z: 0.82 },
       system: "orthopedic_knee",
       surgeon: "Dr. David Sterling, MD",
@@ -327,7 +327,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-cabg",
       name: "Coronary Artery Bypass Graft (CABG x3)",
-      plainName: "Heart Bypass Surgery (Triple Bypass)",
+      plainName: "Coronary Artery Bypass Graft (CABG)",
       site: "Anterior Midline Thorax",
       incision: "Median sternotomy scar & right saphenous vein harvest sites",
       coords: { x: 0.0, y: 4.1, z: 1.25 },
@@ -338,10 +338,10 @@ export const CLINICAL_CATALOG = {
     },
     {
       id: "surg-cataract",
-      name: "Cataract Extraction with IOL (Right Eye)",
-      plainName: "Right Eye Cataract Lens Replacement",
-      site: "Right Eye / Corneal Limbus",
-      incision: "Clear corneal micro-incision in right eye (2.4 mm)",
+      name: "Cataract Extraction with Intraocular Lens",
+      plainName: "Cataract Extraction with Intraocular Lens",
+      site: "Eye / Corneal Limbus",
+      incision: "Clear corneal micro-incision (2.4 mm)",
       coords: { x: -0.38, y: 7.7, z: 0.98 },
       system: "ophthalmic",
       surgeon: "Dr. Kenneth Moore, MD",
@@ -350,10 +350,10 @@ export const CLINICAL_CATALOG = {
     },
     {
       id: "surg-hernia",
-      name: "Inguinal Hernia Repair (Right)",
-      plainName: "Groin Hernia Repair with Mesh",
-      site: "Right Inguinal Canal / Groin",
-      incision: "Right oblique groin incision with polypropylene mesh",
+      name: "Inguinal Hernia Repair",
+      plainName: "Inguinal Hernia Repair",
+      site: "Inguinal Canal / Groin",
+      incision: "Oblique groin incision with polypropylene mesh",
       coords: { x: -0.6, y: 0.6, z: 1.1 },
       system: "pelvic",
       surgeon: "Dr. Richard Becker, MD",
@@ -362,10 +362,10 @@ export const CLINICAL_CATALOG = {
     },
     {
       id: "surg-carpal-tunnel",
-      name: "Carpal Tunnel Release (Right)",
-      plainName: "Right Wrist Carpal Tunnel Release",
-      site: "Right Volar Wrist",
-      incision: "Right palmar incision along thenar crease (2.5 cm)",
+      name: "Carpal Tunnel Release",
+      plainName: "Carpal Tunnel Release",
+      site: "Volar Wrist",
+      incision: "Palmar incision along thenar crease (2.5 cm)",
       coords: { x: -3.05, y: -1.1, z: 0.35 },
       system: "orthopedic",
       surgeon: "Dr. Patricia Ramos, MD",
@@ -375,7 +375,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-discectomy",
       name: "Lumbar Microdiscectomy (L4-L5)",
-      plainName: "Lower Back Disc Repair / Removal",
+      plainName: "Lumbar Microdiscectomy (L4-L5)",
       site: "Posterior Midline Lumbar Spine",
       incision: "Posterior midline vertical lumbar incision (3 cm)",
       coords: { x: 0.0, y: 1.8, z: -1.05 },
@@ -387,10 +387,10 @@ export const CLINICAL_CATALOG = {
     },
     {
       id: "surg-tha-left",
-      name: "Total Hip Arthroplasty (Left)",
-      plainName: "Left Hip Joint Replacement",
-      site: "Left Posterolateral Hip",
-      incision: "Posterolateral curved incision over left greater trochanter",
+      name: "Hip Arthroplasty / Joint Replacement",
+      plainName: "Hip Arthroplasty / Joint Replacement",
+      site: "Posterolateral Hip",
+      incision: "Posterolateral curved incision over greater trochanter",
       coords: { x: 1.35, y: 0.5, z: 0.4 },
       system: "orthopedic_hip",
       surgeon: "Dr. David Sterling, MD",
@@ -399,10 +399,10 @@ export const CLINICAL_CATALOG = {
     },
     {
       id: "surg-rotator-cuff",
-      name: "Rotator Cuff Repair (Right Shoulder)",
-      plainName: "Right Shoulder Tendon Repair",
-      site: "Right Anterior-Lateral Shoulder",
-      incision: "3 arthroscopic portal puncture scars on right shoulder",
+      name: "Rotator Cuff Repair",
+      plainName: "Rotator Cuff Repair",
+      site: "Anterior-Lateral Shoulder",
+      incision: "Arthroscopic portal puncture scars",
       coords: { x: -2.45, y: 4.9, z: 0.6 },
       system: "orthopedic",
       surgeon: "Dr. Brian Gallagher, MD",
@@ -412,7 +412,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-thyroid",
       name: "Total Thyroidectomy",
-      plainName: "Complete Thyroid Gland Removal",
+      plainName: "Total Thyroidectomy",
       site: "Anterior Low Cervical Neck",
       incision: "Low transverse collar incision following natural skin crease",
       coords: { x: 0.0, y: 5.6, z: 0.65 },
@@ -424,7 +424,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-tonsils",
       name: "Bilateral Tonsillectomy",
-      plainName: "Tonsils Removal Surgery",
+      plainName: "Bilateral Tonsillectomy",
       site: "Oropharynx / Palatine Tonsils",
       incision: "Internal mucosal electrocautery (no external scar)",
       coords: { x: 0.0, y: 6.2, z: 0.6 },
@@ -436,7 +436,7 @@ export const CLINICAL_CATALOG = {
     {
       id: "surg-pacemaker",
       name: "Dual-Chamber Pacemaker Implantation",
-      plainName: "Heart Pacemaker Placement",
+      plainName: "Dual-Chamber Pacemaker Implantation",
       site: "Left Subclavian Prepectoral Region",
       incision: "Horizontal infraclavicular pocket incision on left chest (4 cm)",
       coords: { x: 1.2, y: 4.7, z: 1.05 },
@@ -447,9 +447,9 @@ export const CLINICAL_CATALOG = {
     },
     {
       id: "surg-lumpectomy",
-      name: "Partial Mastectomy (Left Lumpectomy)",
-      plainName: "Breast Lump Removal (Lumpectomy)",
-      site: "Left Upper Outer Breast Quadrant",
+      name: "Partial Mastectomy (Lumpectomy)",
+      plainName: "Partial Mastectomy (Lumpectomy)",
+      site: "Upper Outer Breast Quadrant",
       incision: "Curvilinear incision with sentinel lymph node biopsy scar",
       coords: { x: 1.1, y: 3.9, z: 1.2 },
       system: "pelvic",
@@ -925,6 +925,192 @@ export function calculateVaccineStatus(vaccine) {
 
   return { status: "current", label: "Documented", isUpToDate: true, badgeColor: "bg-emerald-500/15 text-emerald-400 border-emerald-500/30" };
 }
+
+/**
+ * Dynamically computes patient's chronological age derived from Date of Birth string (YYYY-MM-DD)
+ */
+export function calculateAge(dobStr, fallbackAge = 58) {
+  if (!dobStr) return fallbackAge;
+  const birth = new Date(dobStr);
+  if (isNaN(birth.getTime())) return fallbackAge;
+  const now = new Date();
+  let a = now.getFullYear() - birth.getFullYear();
+  const m = now.getMonth() - birth.getMonth();
+  if (m < 0 || (m === 0 && now.getDate() < birth.getDate())) {
+    a--;
+  }
+  return a >= 0 && a < 130 ? a : fallbackAge;
+}
+
+/**
+ * Smart Clinical Association Engine Mapping:
+ * Maps common active medications to their probable indication, standard clinical starting doses,
+ * and clear, non-abbreviated patient-friendly frequencies.
+ */
+export const MEDICATION_CLINICAL_ASSOCIATIONS = {
+  "Lisinopril": {
+    indication: "Hypertension",
+    standardDoses: ["5 mg", "10 mg", "20 mg", "40 mg"],
+    defaultDose: { number: "10", unit: "mg" },
+    defaultFrequency: "Once daily"
+  },
+  "Losartan": {
+    indication: "Hypertension",
+    standardDoses: ["25 mg", "50 mg", "100 mg"],
+    defaultDose: { number: "50", unit: "mg" },
+    defaultFrequency: "Once daily"
+  },
+  "Amlodipine": {
+    indication: "Hypertension",
+    standardDoses: ["2.5 mg", "5 mg", "10 mg"],
+    defaultDose: { number: "5", unit: "mg" },
+    defaultFrequency: "Once daily"
+  },
+  "Hydrochlorothiazide": {
+    indication: "Hypertension",
+    standardDoses: ["12.5 mg", "25 mg", "50 mg"],
+    defaultDose: { number: "25", unit: "mg" },
+    defaultFrequency: "Every morning"
+  },
+  "Metoprolol Succinate": {
+    indication: "Hypertension",
+    standardDoses: ["25 mg", "50 mg", "100 mg", "200 mg"],
+    defaultDose: { number: "50", unit: "mg" },
+    defaultFrequency: "Once daily"
+  },
+  "Metoprolol Tartrate": {
+    indication: "Hypertension",
+    standardDoses: ["25 mg", "50 mg", "100 mg"],
+    defaultDose: { number: "50", unit: "mg" },
+    defaultFrequency: "Twice daily"
+  },
+  "Metformin": {
+    indication: "Type 2 Diabetes Mellitus",
+    standardDoses: ["500 mg", "850 mg", "1000 mg"],
+    defaultDose: { number: "500", unit: "mg" },
+    defaultFrequency: "Twice daily"
+  },
+  "Atorvastatin": {
+    indication: "Hyperlipidemia",
+    standardDoses: ["10 mg", "20 mg", "40 mg", "80 mg"],
+    defaultDose: { number: "20", unit: "mg" },
+    defaultFrequency: "At bedtime"
+  },
+  "Rosuvastatin": {
+    indication: "Hyperlipidemia",
+    standardDoses: ["5 mg", "10 mg", "20 mg", "40 mg"],
+    defaultDose: { number: "10", unit: "mg" },
+    defaultFrequency: "Once daily"
+  },
+  "Levothyroxine": {
+    indication: "Hypothyroidism",
+    standardDoses: ["25 mcg", "50 mcg", "75 mcg", "88 mcg", "100 mcg", "112 mcg", "125 mcg"],
+    defaultDose: { number: "50", unit: "mcg" },
+    defaultFrequency: "Every morning"
+  },
+  "Apixaban": {
+    indication: "Atrial Fibrillation",
+    standardDoses: ["2.5 mg", "5 mg"],
+    defaultDose: { number: "5", unit: "mg" },
+    defaultFrequency: "Twice daily"
+  },
+  "Warfarin": {
+    indication: "Atrial Fibrillation",
+    standardDoses: ["2 mg", "2.5 mg", "5 mg", "7.5 mg", "10 mg"],
+    defaultDose: { number: "5", unit: "mg" },
+    defaultFrequency: "At bedtime"
+  },
+  "Clopidogrel": {
+    indication: "Coronary Artery Disease",
+    standardDoses: ["75 mg"],
+    defaultDose: { number: "75", unit: "mg" },
+    defaultFrequency: "Once daily"
+  },
+  "Aspirin": {
+    indication: "Coronary Artery Disease",
+    standardDoses: ["81 mg", "325 mg"],
+    defaultDose: { number: "81", unit: "mg" },
+    defaultFrequency: "Once daily"
+  },
+  "Omeprazole": {
+    indication: "Gastroesophageal Reflux Disease (GERD)",
+    standardDoses: ["20 mg", "40 mg"],
+    defaultDose: { number: "20", unit: "mg" },
+    defaultFrequency: "Every morning"
+  },
+  "Pantoprazole": {
+    indication: "Gastroesophageal Reflux Disease (GERD)",
+    standardDoses: ["20 mg", "40 mg"],
+    defaultDose: { number: "40", unit: "mg" },
+    defaultFrequency: "Every morning"
+  },
+  "Albuterol": {
+    indication: "Asthma",
+    standardDoses: ["1-2 puffs", "2 puffs"],
+    defaultDose: { number: "2", unit: "puffs" },
+    defaultFrequency: "As needed"
+  },
+  "Gabapentin": {
+    indication: "Neuropathy / Chronic Pain",
+    standardDoses: ["100 mg", "300 mg", "600 mg", "800 mg"],
+    defaultDose: { number: "300", unit: "mg" },
+    defaultFrequency: "Three times daily"
+  },
+  "Duloxetine": {
+    indication: "Major Depressive Disorder",
+    standardDoses: ["20 mg", "30 mg", "60 mg"],
+    defaultDose: { number: "30", unit: "mg" },
+    defaultFrequency: "Once daily"
+  },
+  "Sertraline": {
+    indication: "Major Depressive Disorder",
+    standardDoses: ["25 mg", "50 mg", "100 mg"],
+    defaultDose: { number: "50", unit: "mg" },
+    defaultFrequency: "Every morning"
+  },
+  "Escitalopram": {
+    indication: "Generalized Anxiety Disorder",
+    standardDoses: ["5 mg", "10 mg", "20 mg"],
+    defaultDose: { number: "10", unit: "mg" },
+    defaultFrequency: "Every morning"
+  },
+  "Furosemide": {
+    indication: "Congestive Heart Failure",
+    standardDoses: ["20 mg", "40 mg", "80 mg"],
+    defaultDose: { number: "20", unit: "mg" },
+    defaultFrequency: "Every morning"
+  },
+  "Spironolactone": {
+    indication: "Congestive Heart Failure",
+    standardDoses: ["25 mg", "50 mg", "100 mg"],
+    defaultDose: { number: "25", unit: "mg" },
+    defaultFrequency: "Once daily"
+  },
+  "Allopurinol": {
+    indication: "Gout",
+    standardDoses: ["100 mg", "200 mg", "300 mg"],
+    defaultDose: { number: "100", unit: "mg" },
+    defaultFrequency: "Once daily"
+  },
+  "Meloxicam": {
+    indication: "Osteoarthritis",
+    standardDoses: ["7.5 mg", "15 mg"],
+    defaultDose: { number: "7.5", unit: "mg" },
+    defaultFrequency: "Once daily"
+  },
+  "Celecoxib": {
+    indication: "Osteoarthritis",
+    standardDoses: ["100 mg", "200 mg"],
+    defaultDose: { number: "200", unit: "mg" },
+    defaultFrequency: "Once daily"
+  },
+  "Tamsulosin": {
+    indication: "Benign Prostatic Hyperplasia (BPH)",
+    standardDoses: ["0.4 mg"],
+    defaultDose: { number: "0.4", unit: "mg" },
+    defaultFrequency: "At bedtime"
+  }
+};
 
 // Default seed patient record
 export const DEFAULT_PATIENT_RECORD = {

@@ -87,18 +87,13 @@ export function SurgeryList({
                         <h3 className={`text-xs font-bold leading-tight ${isLight ? "text-slate-900 group-hover:text-indigo-800" : "text-slate-100"}`}>
                           {surg.name}
                         </h3>
-                        {surg.plainName && surg.plainName.toLowerCase() !== surg.name.toLowerCase() && (
-                          <span className="text-[10px] font-medium text-indigo-700 bg-indigo-50 border border-indigo-200/70 px-1.5 py-0.2 rounded">
-                            {surg.plainName}
-                          </span>
-                        )}
                       </div>
                       <div className={`text-[11px] mt-1 space-y-0.5 ${isLight ? "text-slate-600" : "text-slate-400"}`}>
                         <div>
-                          Surgery Date / Done: <span className="font-medium text-slate-800 dark:text-slate-200">{surg.surgeryDate || "N/A"}</span>
+                          Surgery Date: <span className="font-medium text-slate-800 dark:text-slate-200">{surg.surgeryDate || "N/A"}</span>
                         </div>
                         <div>
-                          Body Area: <span className="font-medium uppercase text-slate-800 dark:text-slate-200">{surg.site || "General"}</span>
+                          Surgical Site: <span className="font-medium uppercase text-slate-800 dark:text-slate-200">{surg.site || "General"}</span>
                           <span
                             className={`ml-1.5 px-1.5 py-0.2 text-[9px] font-semibold rounded border ${
                               isItemRelevantForPerspective(surg, "posterior")

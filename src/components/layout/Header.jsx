@@ -15,6 +15,7 @@ import {
   Award,
   Upload
 } from "lucide-react";
+import { calculateAge } from "../../lib/clinicalCatalog";
 
 export function Header({
   profile = {},
@@ -79,7 +80,7 @@ export function Header({
           </div>
           <span className="text-slate-300">|</span>
           <div className="text-slate-600">
-            Age <strong className="text-slate-900 font-bold">{profile.age || 58}</strong>
+            Age <strong className="text-slate-900 font-bold">{calculateAge(profile.dob, profile.age || 58)}</strong>
           </div>
           <span className="text-slate-300">|</span>
           <div className="font-mono text-teal-800 font-medium text-[11px]">{profile.mrn || "#PMHX-84920"}</div>

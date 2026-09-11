@@ -29,10 +29,90 @@ import {
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
-import { CLINICAL_CATALOG } from "../../lib/clinicalCatalog";
+import { CLINICAL_CATALOG, calculateAge, MEDICATION_CLINICAL_ASSOCIATIONS } from "../../lib/clinicalCatalog";
 
 // Configure pdfjs worker client-side
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+
+const currentYear = new Date().getFullYear();
+const HISTORICAL_YEARS = Array.from({ length: 76 }, (_, i) => (currentYear - i).toString());
+
+const SURGERY_MONTHS = [
+  { value: "01", label: "01 - Jan" },
+  { value: "02", label: "02 - Feb" },
+  { value: "03", label: "03 - Mar" },
+  { value: "04", label: "04 - Apr" },
+  { value: "05", label: "05 - May" },
+  { value: "06", label: "06 - Jun" },
+  { value: "07", label: "07 - Jul" },
+  { value: "08", label: "08 - Aug" },
+  { value: "09", label: "09 - Sep" },
+  { value: "10", label: "10 - Oct" },
+  { value: "11", label: "11 - Nov" },
+  { value: "12", label: "12 - Dec" }
+];
+
+const EMERGENCY_RELATIONSHIPS = [
+  "Spouse",
+  "Parent",
+  "Child",
+  "Sibling",
+  "Partner",
+  "Relative",
+  "Friend",
+  "Caregiver",
+  "Other"
+];
+
+const BLOOD_TYPES = [
+  "I don't know",
+  "A Positive (A+)",
+  "A Negative (A-)",
+  "B Positive (B+)",
+  "B Negative (B-)",
+  "AB Positive (AB+)",
+  "AB Negative (AB-)",
+  "O Positive (O+)",
+  "O Negative (O-)"
+];
+
+const STANDARD_FREQUENCIES = [
+  "Once daily",
+  "Twice daily",
+  "Three times daily",
+  "Four times daily",
+  "Every morning",
+  "At bedtime",
+  "Every other day",
+  "Once weekly",
+  "As needed"
+];
+
+const getMedicationClinicalDefaults = (drugName, existingConditions = []) => {
+  const clean = (drugName || "").split("(")[0].trim().toLowerCase();
+  const matchedKey = Object.keys(MEDICATION_CLINICAL_ASSOCIATIONS).find(
+    (k) => clean.includes(k.toLowerCase()) || k.toLowerCase().includes(clean)
+  );
+
+  if (matchedKey) {
+    const assoc = MEDICATION_CLINICAL_ASSOCIATIONS[matchedKey];
+    return {
+      doseNumber: assoc.defaultDose.number,
+      doseUnit: assoc.defaultDose.unit,
+      frequency: assoc.defaultFrequency,
+      indication: assoc.indication,
+      standardDoses: assoc.standardDoses
+    };
+  }
+
+  return {
+    doseNumber: "10",
+    doseUnit: "mg",
+    frequency: "Once daily",
+    indication: existingConditions[0]?.name || "General Health Maintenance",
+    standardDoses: ["5 mg", "10 mg", "20 mg"]
+  };
+};
 
 // Predefined catalogs and lookups
 const COMMON_ALLERGIC_DRUGS = [
@@ -136,18 +216,23 @@ const COMMON_VACCINES = [
 ];
 
 const isArthroplastyOrSided = (surgName = "") => {
-  const lower = surgName.toLowerCase();
+  const lower = (surgName || "").toLowerCase();
   return (
     lower.includes("replacement") ||
     lower.includes("arthroplasty") ||
     lower.includes("knee") ||
     lower.includes("hip") ||
     lower.includes("shoulder") ||
+    lower.includes("elbow") ||
+    lower.includes("wrist") ||
+    lower.includes("ankle") ||
     lower.includes("carpal") ||
     lower.includes("cataract") ||
     lower.includes("hernia") ||
     lower.includes("rotator") ||
-    lower.includes("mastectomy")
+    lower.includes("mastectomy") ||
+    lower.includes("lumpectomy") ||
+    lower.includes("joint replacement")
   );
 };
 
@@ -171,8 +256,13 @@ export function PatientOnboardingModal({
   const [lastName, setLastName] = useState(initialNames.slice(1).join(" ") || "");
   const [dob, setDob] = useState(initialProfile.dob || "1980-01-01");
   const [sex, setSex] = useState(initialProfile.sex || "female");
-  const [bloodType, setBloodType] = useState(initialProfile.bloodType || "O Positive");
-  const [emergencyContact, setEmergencyContact] = useState(initialProfile.emergencyContact || "");
+  const [otherSexSpecification, setOtherSexSpecification] = useState(
+    initialProfile.sex === "other" ? (initialProfile.otherSexSpecification || "") : ""
+  );
+  const [bloodType, setBloodType] = useState(initialProfile.bloodType || "I don't know");
+  const [emergencyContactName, setEmergencyContactName] = useState(initialProfile.emergencyContactName || "");
+  const [emergencyContactRelation, setEmergencyContactRelation] = useState(initialProfile.emergencyContactRelation || "Spouse");
+  const [emergencyContactPhone, setEmergencyContactPhone] = useState(initialProfile.emergencyContactPhone || "");
 
   // Multi-entry structured drug allergies
   const [isNkda, setIsNkda] = useState(false);
@@ -192,7 +282,7 @@ export function PatientOnboardingModal({
   const [customCond, setCustomCond] = useState({
     name: "",
     regionId: "general_systemic",
-    onsetDate: new Date().getFullYear().toString(),
+    onsetDate: currentYear.toString(),
     notes: ""
   });
 
@@ -202,8 +292,11 @@ export function PatientOnboardingModal({
   const [isAddingCustomSurg, setIsAddingCustomSurg] = useState(false);
   const [customSurg, setCustomSurg] = useState({
     name: "",
-    site: "Right Knee Joint",
-    surgeryDate: new Date().getFullYear().toString(),
+    site: "Knee Joint",
+    surgeryMonth: "06",
+    surgeryYear: currentYear.toString(),
+    timingUnknown: false,
+    surgeryDate: `06/${currentYear}`,
     hospital: "",
     surgeon: "",
     laterality: "Right",
@@ -311,12 +404,12 @@ export function PatientOnboardingModal({
         {
           id: cond.id || `cond-${Date.now()}`,
           name: cond.name,
-          plainName: cond.plainName,
+          plainName: cond.plainName || cond.name,
           region: cond.region,
           coords: cond.coords,
           system: cond.system,
           icd10: cond.icd10,
-          onsetDate: new Date().getFullYear().toString(),
+          onsetDate: currentYear.toString(),
           provider: "",
           notes: cond.notes || ""
         }
@@ -335,12 +428,12 @@ export function PatientOnboardingModal({
       coords: regionObj.coords,
       system: regionObj.system,
       isPosterior: regionObj.isPosterior || false,
-      onsetDate: customCond.onsetDate || new Date().getFullYear().toString(),
+      onsetDate: customCond.onsetDate || "N/A",
       provider: "",
       notes: customCond.notes || "Custom entered condition."
     };
     setSelectedConditions((prev) => [...prev, newCond]);
-    setCustomCond({ name: "", regionId: "general_systemic", onsetDate: new Date().getFullYear().toString(), notes: "" });
+    setCustomCond({ name: "", regionId: "general_systemic", onsetDate: currentYear.toString(), notes: "" });
     setIsAddingCustomCond(false);
   };
 
@@ -352,18 +445,22 @@ export function PatientOnboardingModal({
       setSelectedSurgeries((prev) => prev.filter((s) => s.name !== surg.name));
     } else {
       const isSided = isArthroplastyOrSided(surg.name);
+      const defaultYear = (currentYear - 2).toString();
       setSelectedSurgeries((prev) => [
         ...prev,
         {
           id: surg.id || `surg-${Date.now()}`,
           name: surg.name,
-          plainName: surg.plainName,
+          plainName: surg.plainName || surg.name,
           site: surg.site,
           incision: surg.incision,
           coords: surg.coords,
           system: surg.system,
           isPosterior: surg.isPosterior || false,
-          surgeryDate: "2022",
+          timingUnknown: false,
+          surgeryMonth: "06",
+          surgeryYear: defaultYear,
+          surgeryDate: `06/${defaultYear}`,
           hospital: surg.hospital || "",
           surgeon: surg.surgeon || "",
           notes: surg.notes || "",
@@ -382,6 +479,21 @@ export function PatientOnboardingModal({
       prev.map((s) => {
         if (s.id !== id) return s;
         const updated = { ...s, [field]: value };
+        if (field === "timingUnknown") {
+          if (value) {
+            updated.surgeryDate = "N/A";
+          } else {
+            const m = updated.surgeryMonth || "01";
+            const y = updated.surgeryYear || currentYear.toString();
+            updated.surgeryDate = `${m}/${y}`;
+          }
+        } else if (field === "surgeryMonth" || field === "surgeryYear") {
+          if (!updated.timingUnknown) {
+            const m = field === "surgeryMonth" ? value : (updated.surgeryMonth || "01");
+            const y = field === "surgeryYear" ? value : (updated.surgeryYear || currentYear.toString());
+            updated.surgeryDate = `${m}/${y}`;
+          }
+        }
         // If laterality changes, flip X coordinate if needed
         if (field === "laterality" && updated.coords) {
           if (value === "Right" && updated.coords.x > 0) {
@@ -401,6 +513,12 @@ export function PatientOnboardingModal({
     let coords = { x: -0.82, y: -4.55, z: 0.82 };
     if (customSurg.laterality === "Left") coords = { x: 0.82, y: -4.55, z: 0.82 };
 
+    const surgeryDate = customSurg.timingUnknown
+      ? "N/A"
+      : customSurg.surgeryMonth && customSurg.surgeryYear
+      ? `${customSurg.surgeryMonth}/${customSurg.surgeryYear}`
+      : customSurg.surgeryYear || "N/A";
+
     const newSurg = {
       id: `surg-custom-${Date.now()}`,
       name: customSurg.name.trim(),
@@ -409,7 +527,10 @@ export function PatientOnboardingModal({
       incision: "Surgical Incision Scar",
       coords,
       system: "orthopedic",
-      surgeryDate: customSurg.surgeryDate || new Date().getFullYear().toString(),
+      timingUnknown: customSurg.timingUnknown,
+      surgeryMonth: customSurg.surgeryMonth || "06",
+      surgeryYear: customSurg.surgeryYear || currentYear.toString(),
+      surgeryDate,
       hospital: customSurg.hospital || "",
       surgeon: customSurg.surgeon || "",
       isSided,
@@ -421,8 +542,11 @@ export function PatientOnboardingModal({
     setSelectedSurgeries((prev) => [...prev, newSurg]);
     setCustomSurg({
       name: "",
-      site: "Right Knee Joint",
-      surgeryDate: new Date().getFullYear().toString(),
+      site: "Knee Joint",
+      surgeryMonth: "06",
+      surgeryYear: currentYear.toString(),
+      timingUnknown: false,
+      surgeryDate: `06/${currentYear}`,
       hospital: "",
       surgeon: "",
       laterality: "Right",
@@ -440,17 +564,19 @@ export function PatientOnboardingModal({
     if (selectedMeds.some((m) => m.name.toLowerCase() === drugName.toLowerCase())) {
       setSelectedMeds((prev) => prev.filter((m) => m.name.toLowerCase() !== drugName.toLowerCase()));
     } else {
+      const defaults = getMedicationClinicalDefaults(drugName, selectedConditions);
       setSelectedMeds((prev) => [
         ...prev,
         {
           id: `med-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
           name: drugName,
-          doseNumber: "10",
-          doseUnit: "mg",
-          dosage: "10 mg",
-          frequency: "Once daily (QD)",
-          startDate: new Date().getFullYear().toString(),
-          indication: selectedConditions[0]?.name || "General Health Maintenance",
+          doseNumber: defaults.doseNumber,
+          doseUnit: defaults.doseUnit,
+          dosage: `${defaults.doseNumber} ${defaults.doseUnit}`,
+          standardDoses: defaults.standardDoses,
+          frequency: defaults.frequency,
+          startDate: currentYear.toString(),
+          indication: defaults.indication,
           customIndication: "",
           route: "Oral (PO)"
         }
@@ -473,6 +599,24 @@ export function PatientOnboardingModal({
     );
   };
 
+  const handleSelectPredefinedDose = (id, doseStr) => {
+    const parts = doseStr.trim().split(" ");
+    const num = parts[0] || "10";
+    const unit = parts.slice(1).join(" ") || "mg";
+    setSelectedMeds((prev) =>
+      prev.map((m) =>
+        m.id === id
+          ? {
+              ...m,
+              doseNumber: num,
+              doseUnit: unit,
+              dosage: doseStr
+            }
+          : m
+      )
+    );
+  };
+
   const handleAddCustomMedication = () => {
     if (!customMedName.trim()) return;
     toggleMedicationItem(customMedName.trim());
@@ -492,7 +636,7 @@ export function PatientOnboardingModal({
         {
           id: `proc-${Date.now()}`,
           procedure_name: proc.name,
-          plainName: proc.plainName,
+          plainName: proc.name,
           procedure_type: proc.type,
           date_performed: new Date().toISOString().split("T")[0],
           anatomical_marker: proc.marker,
@@ -552,7 +696,7 @@ export function PatientOnboardingModal({
         {
           id: `vax-${Date.now()}`,
           vaccine_name: vax.name,
-          plainName: vax.plainName,
+          plainName: vax.name,
           date_administered: new Date().toISOString().split("T")[0],
           dose_number: 1,
           administering_facility: "Local Health Center",
@@ -596,6 +740,10 @@ export function PatientOnboardingModal({
   ------------------------------------------------------------- */
   const handleFinishWizard = () => {
     const fullName = `${firstName.trim()} ${lastName.trim()}`.trim() || "Elena Vance";
+    const dynamicAge = calculateAge(dob);
+    const formattedContact = emergencyContactName.trim()
+      ? `${emergencyContactName.trim()} (${emergencyContactRelation}) • ${emergencyContactPhone.trim()}`
+      : "N/A";
 
     // Format structured allergies for demographics
     const formattedAllergiesList = isNkda
@@ -623,9 +771,14 @@ export function PatientOnboardingModal({
       profile: {
         name: fullName,
         dob,
+        age: dynamicAge,
         sex,
+        otherSexSpecification: sex === "other" ? otherSexSpecification : "",
         bloodType,
-        emergencyContact
+        emergencyContactName,
+        emergencyContactRelation,
+        emergencyContactPhone,
+        emergencyContact: formattedContact
       },
       isNkda,
       allergiesList: formattedAllergiesList,
@@ -785,13 +938,24 @@ export function PatientOnboardingModal({
   };
 
   const handleFinishPdfImport = () => {
+    const finalDob = extractedData.profile?.dob || dob;
+    const dynamicAge = calculateAge(finalDob);
+    const formattedContact = emergencyContactName.trim()
+      ? `${emergencyContactName.trim()} (${emergencyContactRelation}) • ${emergencyContactPhone.trim()}`
+      : "N/A";
+
     onBatchCommit({
       profile: {
         name: extractedData.profile?.name || `${firstName} ${lastName}`.trim() || "Elena Vance",
-        dob: extractedData.profile?.dob || dob,
+        dob: finalDob,
+        age: dynamicAge,
         sex,
+        otherSexSpecification: sex === "other" ? otherSexSpecification : "",
         bloodType,
-        emergencyContact
+        emergencyContactName,
+        emergencyContactRelation,
+        emergencyContactPhone,
+        emergencyContact: formattedContact
       },
       isNkda: false,
       allergiesList: [],
@@ -856,15 +1020,10 @@ export function PatientOnboardingModal({
                   {viewMode === "pdf_upload" && "Smart Health Record Import"}
                   {viewMode === "pdf_review" && "Verify Extracted Health Data"}
                 </h2>
-                {viewMode === "wizard" && (
-                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
-                    Dual Terminology Enabled
-                  </span>
-                )}
               </div>
               <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
                 {viewMode === "choice" && "Select an intake method to calibrate your personalized 3D medical history"}
-                {viewMode === "wizard" && "Structured questionnaire with Grade 6–8 plain language guidance"}
+                {viewMode === "wizard" && "Structured clinical health questionnaire with anatomical precision"}
                 {viewMode === "pdf_upload" && "100% private, on-device parsing with zero sensitive data egress"}
                 {viewMode === "pdf_review" && "Review findings extracted from your clinical summary"}
               </p>
@@ -916,7 +1075,7 @@ export function PatientOnboardingModal({
                       </span>
                     </div>
                     <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
-                      Structured 6-step questionnaire with plain language definitions, orthopedic laterality checks, and custom dosing controls.
+                      Structured 6-step questionnaire with clinical specificity, anatomical laterality checks, and custom dosing controls.
                     </p>
                   </div>
                   <div className="mt-6 flex items-center gap-1.5 text-xs font-bold text-teal-700 dark:text-teal-400">
@@ -1065,11 +1224,16 @@ export function PatientOnboardingModal({
                         />
                       </div>
 
-                      {/* Date of Birth */}
+                      {/* Date of Birth & Dynamic Age */}
                       <div>
-                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Date of Birth <span className="text-rose-500">*</span>
-                        </label>
+                        <div className="flex items-center justify-between mb-1">
+                          <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300">
+                            Date of Birth <span className="text-rose-500">*</span>
+                          </label>
+                          <span className="text-[11px] font-bold text-teal-700 dark:text-teal-300 bg-teal-100/70 dark:bg-teal-950/80 px-2 py-0.5 rounded border border-teal-300 dark:border-teal-700">
+                            Age: {calculateAge(dob)} yo
+                          </span>
+                        </div>
                         <input
                           type="date"
                           value={dob}
@@ -1078,51 +1242,96 @@ export function PatientOnboardingModal({
                         />
                       </div>
 
-                      {/* Biological Sex */}
+                      {/* Sex Selector */}
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Biological Sex / Model View
+                          Sex <span className="text-rose-500">*</span>
                         </label>
                         <select
                           value={sex}
                           onChange={(e) => setSex(e.target.value)}
                           className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-teal-500 focus:outline-hidden font-medium"
                         >
-                          <option value="female">Female (Anatomical Model)</option>
-                          <option value="male">Male (Anatomical Model)</option>
+                          <option value="male">Male</option>
+                          <option value="female">Female</option>
+                          <option value="other">Other</option>
                         </select>
+                        {sex === "other" && (
+                          <div className="mt-1.5 animate-in fade-in duration-150">
+                            <input
+                              type="text"
+                              value={otherSexSpecification}
+                              onChange={(e) => setOtherSexSpecification(e.target.value)}
+                              placeholder="Specify identification..."
+                              className="w-full px-2.5 py-1 text-xs border rounded-lg bg-teal-50/50 dark:bg-slate-800 border-teal-300 dark:border-teal-700 focus:ring-2 focus:ring-teal-500 focus:outline-hidden"
+                            />
+                          </div>
+                        )}
                       </div>
                     </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/60">
+                    {/* Blood Type & Emergency Contact Breakdown */}
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/60">
+                      {/* Blood Type */}
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Blood Type (Optional)
+                          Blood Type
                         </label>
                         <select
                           value={bloodType}
                           onChange={(e) => setBloodType(e.target.value)}
                           className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
                         >
-                          <option value="O Positive">O Positive (O+)</option>
-                          <option value="O Negative">O Negative (O-)</option>
-                          <option value="A Positive">A Positive (A+)</option>
-                          <option value="A Negative">A Negative (A-)</option>
-                          <option value="B Positive">B Positive (B+)</option>
-                          <option value="B Negative">B Negative (B-)</option>
-                          <option value="AB Positive">AB Positive (AB+)</option>
-                          <option value="AB Negative">AB Negative (AB-)</option>
+                          {BLOOD_TYPES.map((bt) => (
+                            <option key={bt} value={bt}>
+                              {bt}
+                            </option>
+                          ))}
                         </select>
                       </div>
+
+                      {/* Emergency Contact Name */}
                       <div>
                         <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                          Emergency Contact & Phone (Optional)
+                          Emergency Contact Name
                         </label>
                         <input
                           type="text"
-                          value={emergencyContact}
-                          onChange={(e) => setEmergencyContact(e.target.value)}
-                          placeholder="e.g. David Vance (Spouse) - (617) 555-0143"
+                          value={emergencyContactName}
+                          onChange={(e) => setEmergencyContactName(e.target.value)}
+                          placeholder="e.g. David Vance"
+                          className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                        />
+                      </div>
+
+                      {/* Emergency Contact Relationship */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Relationship
+                        </label>
+                        <select
+                          value={emergencyContactRelation}
+                          onChange={(e) => setEmergencyContactRelation(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                        >
+                          {EMERGENCY_RELATIONSHIPS.map((rel) => (
+                            <option key={rel} value={rel}>
+                              {rel}
+                            </option>
+                          ))}
+                        </select>
+                      </div>
+
+                      {/* Emergency Contact Phone */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Phone Number
+                        </label>
+                        <input
+                          type="tel"
+                          value={emergencyContactPhone}
+                          onChange={(e) => setEmergencyContactPhone(e.target.value)}
+                          placeholder="e.g. (617) 555-0143"
                           className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
                         />
                       </div>
@@ -1314,15 +1523,20 @@ export function PatientOnboardingModal({
 
                         <div>
                           <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            Year Diagnosed
+                            Diagnosis Year
                           </label>
-                          <input
-                            type="text"
-                            value={customCond.onsetDate}
+                          <select
+                            value={customCond.onsetDate || "N/A"}
                             onChange={(e) => setCustomCond((c) => ({ ...c, onsetDate: e.target.value }))}
-                            placeholder="e.g. 2021"
-                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
-                          />
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 font-medium"
+                          >
+                            <option value="N/A">I don't know</option>
+                            {HISTORICAL_YEARS.map((y) => (
+                              <option key={y} value={y}>
+                                {y}
+                              </option>
+                            ))}
+                          </select>
                         </div>
                       </div>
 
@@ -1379,10 +1593,10 @@ export function PatientOnboardingModal({
                           >
                             <div className="flex-1 min-w-0">
                               <div className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
-                                {cond.plainName || cond.name}
+                                {cond.name}
                               </div>
                               <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                <span className="font-semibold">{cond.name}</span> • {cond.region}
+                                {cond.region}
                               </div>
                             </div>
                             <div
@@ -1394,25 +1608,30 @@ export function PatientOnboardingModal({
                             </div>
                           </div>
 
-                          {/* Reveal diagnosis year and clinician inputs when checked */}
+                          {/* Reveal diagnosis year dropdown and clinician inputs when checked */}
                           {isSelected && (
                             <div className="mt-2.5 pt-2.5 border-t border-teal-200/60 dark:border-teal-800/60 grid grid-cols-2 gap-2">
                               <div>
                                 <label className="block text-[10px] font-bold text-teal-950 dark:text-teal-200 mb-0.5">
                                   Diagnosis Year
                                 </label>
-                                <input
-                                  type="text"
-                                  value={selectedItem.onsetDate || ""}
+                                <select
+                                  value={selectedItem.onsetDate || "N/A"}
                                   onChange={(e) => {
                                     const val = e.target.value;
                                     setSelectedConditions((prev) =>
                                       prev.map((c) => (c.name === cond.name ? { ...c, onsetDate: val } : c))
                                     );
                                   }}
-                                  placeholder="e.g. 2019"
-                                  className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-teal-300 dark:border-teal-700"
-                                />
+                                  className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-teal-300 dark:border-teal-700 font-medium"
+                                >
+                                  <option value="N/A">I don't know</option>
+                                  {HISTORICAL_YEARS.map((y) => (
+                                    <option key={y} value={y}>
+                                      {y}
+                                    </option>
+                                  ))}
+                                </select>
                               </div>
                               <div>
                                 <label className="block text-[10px] font-bold text-teal-950 dark:text-teal-200 mb-0.5">
@@ -1509,16 +1728,67 @@ export function PatientOnboardingModal({
                         </div>
 
                         <div>
-                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
-                            Year Performed
-                          </label>
-                          <input
-                            type="text"
-                            value={customSurg.surgeryDate}
-                            onChange={(e) => setCustomSurg((s) => ({ ...s, surgeryDate: e.target.value }))}
-                            placeholder="e.g. 2022"
-                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
-                          />
+                          <div className="flex items-center justify-between mb-1">
+                            <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300">
+                              Surgery Date
+                            </label>
+                            <label className="flex items-center gap-1 cursor-pointer text-[10px] font-bold text-slate-600 dark:text-slate-400">
+                              <input
+                                type="checkbox"
+                                checked={customSurg.timingUnknown}
+                                onChange={(e) => {
+                                  const checked = e.target.checked;
+                                  setCustomSurg((s) => ({
+                                    ...s,
+                                    timingUnknown: checked,
+                                    surgeryDate: checked ? "N/A" : `${s.surgeryMonth || "06"}/${s.surgeryYear || currentYear}`
+                                  }));
+                                }}
+                                className="w-3 h-3 rounded text-indigo-600 focus:ring-indigo-500"
+                              />
+                              <span>I don't know</span>
+                            </label>
+                          </div>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <select
+                              disabled={customSurg.timingUnknown}
+                              value={customSurg.surgeryMonth}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setCustomSurg((s) => ({
+                                  ...s,
+                                  surgeryMonth: val,
+                                  surgeryDate: s.timingUnknown ? "N/A" : `${val}/${s.surgeryYear || currentYear}`
+                                }));
+                              }}
+                              className="w-full px-2 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 disabled:opacity-40 disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                            >
+                              {SURGERY_MONTHS.map((m) => (
+                                <option key={m.value} value={m.value}>
+                                  {m.label}
+                                </option>
+                              ))}
+                            </select>
+                            <select
+                              disabled={customSurg.timingUnknown}
+                              value={customSurg.surgeryYear}
+                              onChange={(e) => {
+                                const val = e.target.value;
+                                setCustomSurg((s) => ({
+                                  ...s,
+                                  surgeryYear: val,
+                                  surgeryDate: s.timingUnknown ? "N/A" : `${s.surgeryMonth || "06"}/${val}`
+                                }));
+                              }}
+                              className="w-full px-2 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 disabled:opacity-40 disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                            >
+                              {HISTORICAL_YEARS.map((y) => (
+                                <option key={y} value={y}>
+                                  {y}
+                                </option>
+                              ))}
+                            </select>
+                          </div>
                         </div>
                       </div>
 
@@ -1596,10 +1866,10 @@ export function PatientOnboardingModal({
                           >
                             <div className="flex-1 min-w-0">
                               <div className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
-                                {surg.plainName || surg.name}
+                                {surg.name}
                               </div>
                               <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                <span className="font-semibold">{surg.name}</span> • {surg.site}
+                                {surg.site}
                               </div>
                             </div>
                             <div
@@ -1660,16 +1930,46 @@ export function PatientOnboardingModal({
 
                               <div className="grid grid-cols-2 gap-2">
                                 <div>
-                                  <label className="block text-[10px] font-bold text-indigo-950 dark:text-indigo-200 mb-0.5">
-                                    Surgery Year / Date
-                                  </label>
-                                  <input
-                                    type="text"
-                                    value={selectedItem.surgeryDate || ""}
-                                    onChange={(e) => handleUpdateSurgeryField(selectedItem.id, "surgeryDate", e.target.value)}
-                                    placeholder="e.g. 2022"
-                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-700"
-                                  />
+                                  <div className="flex items-center justify-between mb-0.5">
+                                    <label className="block text-[10px] font-bold text-indigo-950 dark:text-indigo-200">
+                                      Surgery Timing
+                                    </label>
+                                    <label className="flex items-center gap-1 cursor-pointer text-[10px] font-bold text-slate-600 dark:text-slate-400">
+                                      <input
+                                        type="checkbox"
+                                        checked={selectedItem.timingUnknown || selectedItem.surgeryDate === "N/A"}
+                                        onChange={(e) => handleUpdateSurgeryField(selectedItem.id, "timingUnknown", e.target.checked)}
+                                        className="w-3 h-3 rounded text-indigo-600 focus:ring-indigo-500"
+                                      />
+                                      <span>I don't know</span>
+                                    </label>
+                                  </div>
+                                  <div className="grid grid-cols-2 gap-1">
+                                    <select
+                                      disabled={selectedItem.timingUnknown || selectedItem.surgeryDate === "N/A"}
+                                      value={selectedItem.surgeryMonth || "06"}
+                                      onChange={(e) => handleUpdateSurgeryField(selectedItem.id, "surgeryMonth", e.target.value)}
+                                      className="w-full px-1.5 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-700 disabled:opacity-40 disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                                    >
+                                      {SURGERY_MONTHS.map((m) => (
+                                        <option key={m.value} value={m.value}>
+                                          {m.label}
+                                        </option>
+                                      ))}
+                                    </select>
+                                    <select
+                                      disabled={selectedItem.timingUnknown || selectedItem.surgeryDate === "N/A"}
+                                      value={selectedItem.surgeryYear || currentYear.toString()}
+                                      onChange={(e) => handleUpdateSurgeryField(selectedItem.id, "surgeryYear", e.target.value)}
+                                      className="w-full px-1.5 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-700 disabled:opacity-40 disabled:bg-slate-100 dark:disabled:bg-slate-800"
+                                    >
+                                      {HISTORICAL_YEARS.map((y) => (
+                                        <option key={y} value={y}>
+                                          {y}
+                                        </option>
+                                      ))}
+                                    </select>
+                                  </div>
                                 </div>
                                 <div>
                                   <label className="block text-[10px] font-bold text-indigo-950 dark:text-indigo-200 mb-0.5">
@@ -1709,18 +2009,18 @@ export function PatientOnboardingModal({
               )}
 
               {/* -------------------------------------------------------------
-                  STEP 4: MEDICATIONS (DECOUPLED DRUGS & PROGRESSIVE DOSING)
+                  STEP 4: MEDICATIONS (DENSE FLUID GRID & CLINICAL LINKAGE)
               ------------------------------------------------------------- */}
               {wizardStep === 4 && (
-                <div className="space-y-5 animate-in fade-in duration-150">
+                <div className="space-y-4 animate-in fade-in duration-150">
                   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
                     <div>
                       <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
                         <Pill className="w-4 h-4 text-amber-600" />
-                        <span>Step 4: Prescription & Routine Medications</span>
+                        <span>Step 4: Active Prescription & Routine Medications</span>
                       </h3>
                       <p className="text-xs text-slate-500 mt-0.5">
-                        Choose medications from the clean alphabetical list. Configure dosage, frequency, and linked diagnosis.
+                        Search and select medications. Dosage presets, patient-friendly schedules, and probable clinical indications are automatically linked.
                       </p>
                     </div>
 
@@ -1755,180 +2055,245 @@ export function PatientOnboardingModal({
                     </div>
                   )}
 
-                  {/* Active Selected Medications with Progressive Disclosure Form */}
-                  {selectedMeds.length > 0 && (
-                    <div className="space-y-2.5 bg-amber-50/30 dark:bg-amber-950/10 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/60">
-                      <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200 flex items-center justify-between">
-                        <span>Configured Prescriptions ({selectedMeds.length})</span>
-                        <span className="text-[10px] font-normal text-slate-500">Fine-tune exact doses and frequencies</span>
-                      </h4>
+                  {/* Dense Fluid 2-Column Split: Catalog on Left (5 cols) & Active Prescriptions on Right (7 cols) */}
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-4">
+                    {/* LEFT COLUMN: Search & Alphabetical Directory */}
+                    <div className="lg:col-span-5 flex flex-col space-y-2.5">
+                      <div className="relative">
+                        <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                        <input
+                          type="text"
+                          value={medSearch}
+                          onChange={(e) => setMedSearch(e.target.value)}
+                          placeholder="Filter medications catalog..."
+                          className="w-full pl-9 pr-4 py-2 text-xs border rounded-xl bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 focus:outline-hidden focus:ring-2 focus:ring-amber-500 font-medium"
+                        />
+                      </div>
 
-                      <div className="space-y-3">
-                        {selectedMeds.map((med) => (
-                          <div
-                            key={med.id}
-                            className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-amber-200/80 dark:border-amber-800/60 shadow-2xs space-y-2.5"
-                          >
-                            <div className="flex items-center justify-between">
-                              <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
-                                <Pill className="w-3.5 h-3.5 text-amber-600" />
-                                <span>{med.name}</span>
-                              </span>
+                      <div className="border border-slate-200 dark:border-slate-800 rounded-xl bg-slate-50/50 dark:bg-slate-900/40 p-2 max-h-[460px] overflow-y-auto pr-1">
+                        <div className="text-[10px] font-bold uppercase tracking-wider text-slate-500 mb-2 px-1 flex items-center justify-between">
+                          <span>Common Clinical Medications</span>
+                          <span>{filteredMedications.length} available</span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-1.5">
+                          {filteredMedications.map((drug) => {
+                            const isSelected = selectedMeds.some((m) => m.name.toLowerCase() === drug.toLowerCase());
+                            return (
                               <button
+                                key={drug}
                                 type="button"
-                                onClick={() => setSelectedMeds((prev) => prev.filter((m) => m.id !== med.id))}
-                                className="text-slate-400 hover:text-rose-600 p-1"
-                                title="Remove medication"
+                                onClick={() => toggleMedicationItem(drug)}
+                                className={`p-2 rounded-lg border text-left text-xs transition-all flex items-center justify-between gap-1.5 ${
+                                  isSelected
+                                    ? "bg-amber-100 border-amber-600 text-amber-950 font-bold dark:bg-amber-950 dark:text-amber-200 shadow-2xs"
+                                    : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-amber-400 hover:bg-amber-50/50"
+                                }`}
                               >
-                                <Trash2 className="w-3.5 h-3.5" />
+                                <span className="truncate">{drug}</span>
+                                <span
+                                  className={`w-4 h-4 rounded-full border flex items-center justify-center shrink-0 text-[10px] font-bold ${
+                                    isSelected ? "bg-amber-600 border-amber-600 text-white" : "border-slate-300 text-slate-400"
+                                  }`}
+                                >
+                                  {isSelected ? "✓" : "+"}
+                                </span>
                               </button>
-                            </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    </div>
 
-                            {/* Dosing, Frequency, Start Date & Linked Condition Grid */}
-                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
-                              {/* Exact Dose (Numeric + Unit) */}
+                    {/* RIGHT COLUMN: Active Configured Prescriptions */}
+                    <div className="lg:col-span-7 flex flex-col space-y-2.5">
+                      <div className="flex items-center justify-between px-1">
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-amber-950 dark:text-amber-200 flex items-center gap-1.5">
+                          <Pill className="w-3.5 h-3.5 text-amber-600" />
+                          <span>Configured Prescriptions ({selectedMeds.length})</span>
+                        </h4>
+                        <span className="text-[11px] text-slate-500">
+                          {selectedMeds.length === 0 ? "None selected" : "Standard doses & schedules linked"}
+                        </span>
+                      </div>
+
+                      {selectedMeds.length === 0 ? (
+                        <div className="h-full min-h-[300px] flex flex-col items-center justify-center p-8 rounded-2xl border-2 border-dashed border-slate-200 dark:border-slate-800 text-center bg-slate-50/40 dark:bg-slate-800/20">
+                          <div className="w-12 h-12 rounded-xl bg-amber-100 dark:bg-amber-950 text-amber-700 dark:text-amber-400 flex items-center justify-center mb-3">
+                            <Pill className="w-6 h-6" />
+                          </div>
+                          <h5 className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                            No Medications Selected
+                          </h5>
+                          <p className="text-xs text-slate-500 max-w-sm mt-1">
+                            Click any medication from the catalog on the left to configure starting doses, non-abbreviated schedules, and linked health conditions.
+                          </p>
+                        </div>
+                      ) : (
+                        <div className="space-y-3 max-h-[460px] overflow-y-auto pr-1">
+                          {selectedMeds.map((med) => (
+                            <div
+                              key={med.id}
+                              className="p-3.5 bg-white dark:bg-slate-900 rounded-xl border border-amber-200/90 dark:border-amber-800/60 shadow-2xs space-y-2.5"
+                            >
+                              <div className="flex items-center justify-between">
+                                <div className="flex items-center gap-2">
+                                  <span className="w-6 h-6 rounded-lg bg-amber-100 text-amber-800 dark:bg-amber-950 dark:text-amber-300 flex items-center justify-center font-bold text-xs shrink-0">
+                                    <Pill className="w-3.5 h-3.5" />
+                                  </span>
+                                  <span className="text-xs font-bold text-slate-900 dark:text-white">
+                                    {med.name}
+                                  </span>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => setSelectedMeds((prev) => prev.filter((m) => m.id !== med.id))}
+                                  className="text-slate-400 hover:text-rose-600 p-1 transition-colors"
+                                  title="Remove medication"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+
+                              {/* Quick-Select Clinical Standard Dose Pill Bar */}
                               <div>
-                                <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
-                                  Dose & Unit
-                                </label>
-                                <div className="flex gap-1">
-                                  <input
-                                    type="text"
-                                    value={med.doseNumber || ""}
-                                    onChange={(e) => handleUpdateMedicationField(med.id, "doseNumber", e.target.value)}
-                                    placeholder="e.g. 20"
-                                    className="w-16 px-2 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-center font-bold"
-                                  />
+                                <div className="flex items-center justify-between mb-1">
+                                  <label className="text-[10px] font-bold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                                    Standard Clinical Doses
+                                  </label>
+                                  <span className="text-[10px] text-amber-700 dark:text-amber-400 font-semibold">
+                                    Current: {med.dosage || `${med.doseNumber || "10"} ${med.doseUnit || "mg"}`}
+                                  </span>
+                                </div>
+                                <div className="flex flex-wrap items-center gap-1.5">
+                                  {(med.standardDoses || ["5 mg", "10 mg", "20 mg"]).map((d) => {
+                                    const isCurrentDose = med.dosage === d || `${med.doseNumber} ${med.doseUnit}` === d;
+                                    return (
+                                      <button
+                                        key={d}
+                                        type="button"
+                                        onClick={() => handleSelectPredefinedDose(med.id, d)}
+                                        className={`px-2 py-0.5 rounded-full text-[11px] font-bold border transition-all ${
+                                          isCurrentDose
+                                            ? "bg-amber-600 text-white border-amber-600 shadow-2xs scale-105"
+                                            : "bg-amber-50/70 hover:bg-amber-100 text-amber-900 border-amber-200 dark:bg-slate-800 dark:text-amber-300 dark:border-slate-700"
+                                        }`}
+                                      >
+                                        {d}
+                                      </button>
+                                    );
+                                  })}
+                                </div>
+                              </div>
+
+                              {/* Dosing, Frequency, Start Date & Indication Grid */}
+                              <div className="grid grid-cols-1 sm:grid-cols-4 gap-2 pt-1 border-t border-slate-100 dark:border-slate-800">
+                                {/* Custom Dose Override */}
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                    Dose & Unit
+                                  </label>
+                                  <div className="flex gap-1">
+                                    <input
+                                      type="text"
+                                      value={med.doseNumber || ""}
+                                      onChange={(e) => handleUpdateMedicationField(med.id, "doseNumber", e.target.value)}
+                                      placeholder="e.g. 20"
+                                      className="w-14 px-1.5 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-center font-bold"
+                                    />
+                                    <select
+                                      value={med.doseUnit || "mg"}
+                                      onChange={(e) => handleUpdateMedicationField(med.id, "doseUnit", e.target.value)}
+                                      className="flex-1 px-1 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
+                                    >
+                                      <option value="mg">mg</option>
+                                      <option value="mcg">mcg</option>
+                                      <option value="g">g</option>
+                                      <option value="mL">mL</option>
+                                      <option value="units">units</option>
+                                      <option value="puffs">puffs</option>
+                                      <option value="drops">drops</option>
+                                      <option value="tablets">tablets</option>
+                                      <option value="patches">patches</option>
+                                    </select>
+                                  </div>
+                                </div>
+
+                                {/* Frequency (Non-abbreviated simple patient-friendly language) */}
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                    Schedule
+                                  </label>
                                   <select
-                                    value={med.doseUnit || "mg"}
-                                    onChange={(e) => handleUpdateMedicationField(med.id, "doseUnit", e.target.value)}
-                                    className="flex-1 px-1.5 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
+                                    value={med.frequency}
+                                    onChange={(e) => handleUpdateMedicationField(med.id, "frequency", e.target.value)}
+                                    className="w-full px-2 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 font-medium"
                                   >
-                                    <option value="mg">mg</option>
-                                    <option value="mcg">mcg</option>
-                                    <option value="g">g</option>
-                                    <option value="mL">mL</option>
-                                    <option value="units">units</option>
-                                    <option value="puffs">puffs</option>
-                                    <option value="drops">drops</option>
-                                    <option value="tablets">tablets</option>
-                                    <option value="patches">patches</option>
+                                    {STANDARD_FREQUENCIES.map((f) => (
+                                      <option key={f} value={f}>
+                                        {f}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {/* Start Year */}
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                    Year Started
+                                  </label>
+                                  <select
+                                    value={med.startDate || "N/A"}
+                                    onChange={(e) => handleUpdateMedicationField(med.id, "startDate", e.target.value)}
+                                    className="w-full px-2 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 font-medium"
+                                  >
+                                    <option value="N/A">I don't know</option>
+                                    {HISTORICAL_YEARS.map((y) => (
+                                      <option key={y} value={y}>
+                                        {y}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </div>
+
+                                {/* Linked Indication with Suggested Clinical Cross-Reference */}
+                                <div>
+                                  <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                    Indication
+                                  </label>
+                                  <select
+                                    value={med.indication}
+                                    onChange={(e) => handleUpdateMedicationField(med.id, "indication", e.target.value)}
+                                    className="w-full px-2 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 font-medium"
+                                  >
+                                    {med.indication && !selectedConditions.some((c) => c.name === med.indication) && (
+                                      <option value={med.indication}>{med.indication} (Suggested)</option>
+                                    )}
+                                    {selectedConditions.map((c) => (
+                                      <option key={c.name} value={c.name}>
+                                        {c.name}
+                                      </option>
+                                    ))}
+                                    <option value="General Health Maintenance">General Health Maintenance</option>
+                                    <option value="Pain Management">Pain Management</option>
+                                    <option value="Infection Treatment">Infection Treatment</option>
+                                    <option value="Other">Other / Custom...</option>
                                   </select>
                                 </div>
                               </div>
 
-                              {/* Frequency */}
-                              <div>
-                                <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
-                                  Frequency
-                                </label>
-                                <select
-                                  value={med.frequency}
-                                  onChange={(e) => handleUpdateMedicationField(med.id, "frequency", e.target.value)}
-                                  className="w-full px-2 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
-                                >
-                                  <option value="Once daily (QD)">Once daily (QD)</option>
-                                  <option value="Twice daily (BID)">Twice daily (BID)</option>
-                                  <option value="Three times daily (TID)">Three times daily (TID)</option>
-                                  <option value="Four times daily (QID)">Four times daily (QID)</option>
-                                  <option value="Every morning (QAM)">Every morning (QAM)</option>
-                                  <option value="Every evening (QPM / QHS)">Every evening (QPM / QHS)</option>
-                                  <option value="Every other day">Every other day</option>
-                                  <option value="Weekly">Weekly</option>
-                                  <option value="As needed (PRN)">As needed (PRN)</option>
-                                </select>
-                              </div>
-
-                              {/* Date Started */}
-                              <div>
-                                <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
-                                  Year / Date Started
-                                </label>
+                              {med.indication === "Other" && (
                                 <input
                                   type="text"
-                                  value={med.startDate || ""}
-                                  onChange={(e) => handleUpdateMedicationField(med.id, "startDate", e.target.value)}
-                                  placeholder="e.g. 2021"
-                                  className="w-full px-2 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-center"
+                                  value={med.customIndication || ""}
+                                  onChange={(e) => handleUpdateMedicationField(med.id, "customIndication", e.target.value)}
+                                  placeholder="Specify exact medical reason..."
+                                  className="w-full px-2.5 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
                                 />
-                              </div>
-
-                              {/* Linked Diagnosis / Reason */}
-                              <div>
-                                <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
-                                  Health Reason (Linked Diagnosis)
-                                </label>
-                                <select
-                                  value={med.indication}
-                                  onChange={(e) => handleUpdateMedicationField(med.id, "indication", e.target.value)}
-                                  className="w-full px-2 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
-                                >
-                                  {selectedConditions.map((c) => (
-                                    <option key={c.name} value={c.name}>
-                                      {c.plainName || c.name}
-                                    </option>
-                                  ))}
-                                  <option value="General Health Maintenance">General Health Maintenance</option>
-                                  <option value="Pain Management">Pain Management</option>
-                                  <option value="Infection Treatment">Infection Treatment</option>
-                                  <option value="Other">Other / Custom Reason...</option>
-                                </select>
-                              </div>
+                              )}
                             </div>
-
-                            {med.indication === "Other" && (
-                              <input
-                                type="text"
-                                value={med.customIndication || ""}
-                                onChange={(e) => handleUpdateMedicationField(med.id, "customIndication", e.target.value)}
-                                placeholder="Specify exact clinical indication or symptoms..."
-                                className="w-full px-2.5 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
-                              />
-                            )}
-                          </div>
-                        ))}
-                      </div>
-                    </div>
-                  )}
-
-                  {/* Alphabetical Selection Grid */}
-                  <div>
-                    <div className="relative mb-3">
-                      <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
-                      <input
-                        type="text"
-                        value={medSearch}
-                        onChange={(e) => setMedSearch(e.target.value)}
-                        placeholder="Search alphabetical catalog of common medications..."
-                        className="w-full pl-9 pr-4 py-2 text-xs border rounded-xl bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
-                      />
-                    </div>
-
-                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-52 overflow-y-auto pr-1">
-                      {filteredMedications.map((drug) => {
-                        const isSelected = selectedMeds.some((m) => m.name.toLowerCase() === drug.toLowerCase());
-                        return (
-                          <button
-                            key={drug}
-                            type="button"
-                            onClick={() => toggleMedicationItem(drug)}
-                            className={`p-2.5 rounded-lg border text-left text-xs transition-all flex items-center justify-between gap-1.5 ${
-                              isSelected
-                                ? "bg-amber-100/80 border-amber-600 text-amber-950 font-bold dark:bg-amber-950 dark:text-amber-200 shadow-2xs"
-                                : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-amber-300"
-                            }`}
-                          >
-                            <span className="truncate">{drug}</span>
-                            <span
-                              className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 text-[9px] ${
-                                isSelected ? "bg-amber-600 border-amber-600 text-white" : "border-slate-300"
-                              }`}
-                            >
-                              {isSelected ? "✓" : "+"}
-                            </span>
-                          </button>
-                        );
-                      })}
+                          ))}
+                        </div>
+                      )}
                     </div>
                   </div>
                 </div>
@@ -2069,10 +2434,10 @@ export function PatientOnboardingModal({
                           >
                             <div className="flex-1 min-w-0">
                               <div className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
-                                {proc.plainName}
+                                {proc.name}
                               </div>
                               <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                <span className="font-semibold">{proc.name}</span> • {proc.marker}
+                                {proc.marker} • {proc.type === "screening" ? "Preventive Screening" : "Diagnostic Evaluation"}
                               </div>
                             </div>
                             <div
@@ -2262,10 +2627,10 @@ export function PatientOnboardingModal({
                           >
                             <div className="flex-1 min-w-0">
                               <div className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
-                                {vax.plainName}
+                                {vax.name}
                               </div>
                               <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
-                                <span className="font-semibold">{vax.name}</span> • {vax.category}
+                                {vax.category}
                               </div>
                             </div>
                             <div

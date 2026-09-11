@@ -86,11 +86,6 @@ export function ConditionList({
                         <h3 className={`text-xs font-bold leading-tight ${isLight ? "text-slate-900 group-hover:text-amber-800" : "text-slate-100"}`}>
                           {cond.name}
                         </h3>
-                        {cond.plainName && cond.plainName !== cond.name && (
-                          <span className="text-[10px] text-amber-800 bg-amber-50 border border-amber-200/80 px-1.5 py-0.2 rounded font-medium">
-                            {cond.plainName}
-                          </span>
-                        )}
                         {cond.icd10 && (
                           <span className="text-[9.5px] font-mono px-1 py-0.2 rounded bg-slate-100 text-slate-600 border border-slate-200">
                             {cond.icd10}
@@ -99,10 +94,10 @@ export function ConditionList({
                       </div>
                       <div className={`text-[11px] mt-1 space-y-0.5 ${isLight ? "text-slate-600" : "text-slate-400"}`}>
                         <div>
-                          Diagnosed / Started: <span className="font-medium text-slate-800 dark:text-slate-200">{cond.onsetDate || "N/A"}</span>
+                          Diagnosed: <span className="font-medium text-slate-800 dark:text-slate-200">{cond.onsetDate || "N/A"}</span>
                         </div>
                         <div>
-                          Body Area: <span className="font-medium uppercase text-slate-800 dark:text-slate-200">{cond.region || "Systemic"}</span>
+                          Anatomical Region: <span className="font-medium uppercase text-slate-800 dark:text-slate-200">{cond.region || "Systemic"}</span>
                           <span
                             className={`ml-1.5 px-1.5 py-0.2 text-[9px] font-semibold rounded border ${
                               isItemRelevantForPerspective(cond, "posterior")

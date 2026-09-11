@@ -176,30 +176,23 @@ export function Scene({
     () => lines.filter((l) => isItemRelevantForPerspective(l, facingPerspective)),
     [lines, facingPerspective]
   );
-  const visibleProcedures = useMemo(
-    () => procedures.filter((p) => isItemRelevantForPerspective(p, facingPerspective)),
-    [procedures, facingPerspective]
-  );
-
   const totalAnterior = useMemo(() => {
     return (
       conditions.filter((c) => isItemRelevantForPerspective(c, "anterior")).length +
       surgeries.filter((s) => isItemRelevantForPerspective(s, "anterior")).length +
       drains.filter((d) => isItemRelevantForPerspective(d, "anterior")).length +
-      lines.filter((l) => isItemRelevantForPerspective(l, "anterior")).length +
-      procedures.filter((p) => isItemRelevantForPerspective(p, "anterior")).length
+      lines.filter((l) => isItemRelevantForPerspective(l, "anterior")).length
     );
-  }, [conditions, surgeries, drains, lines, procedures]);
+  }, [conditions, surgeries, drains, lines]);
 
   const totalPosterior = useMemo(() => {
     return (
       conditions.filter((c) => isItemRelevantForPerspective(c, "posterior")).length +
       surgeries.filter((s) => isItemRelevantForPerspective(s, "posterior")).length +
       drains.filter((d) => isItemRelevantForPerspective(d, "posterior")).length +
-      lines.filter((l) => isItemRelevantForPerspective(l, "posterior")).length +
-      procedures.filter((p) => isItemRelevantForPerspective(p, "posterior")).length
+      lines.filter((l) => isItemRelevantForPerspective(l, "posterior")).length
     );
-  }, [conditions, surgeries, drains, lines, procedures]);
+  }, [conditions, surgeries, drains, lines]);
 
   // Hovered item state for Master Hover Tooltip (rendered with highest priority z-index)
   const [hoveredItem, setHoveredItem] = useState(null);
@@ -404,28 +397,6 @@ export function Scene({
                 />
               ))}
 
-              {/* Procedures Badge Markers (Sky Blue Diagnostics) */}
-              {visibleProcedures.map((proc) => {
-                const procWithCoords = {
-                  ...proc,
-                  name: proc.procedure_name || proc.name,
-                  region: proc.anatomical_marker || proc.anatomicalMarker || "Thorax / Abdomen",
-                  coords: proc.coords || { x: 0.1, y: 1.8, z: 1.05 }
-                };
-                return (
-                  <MarkerPin
-                    key={proc.id}
-                    item={procWithCoords}
-                    type="procedure"
-                    isFocused={focusedItem?.id === proc.id}
-                    turntableAngle={perspective === "posterior" ? Math.PI : 0}
-                    onSelect={onSelectItem}
-                    onClose={onResetFocus}
-                    onEdit={onEditItem}
-                    onHover={setHoveredItem}
-                  />
-                );
-              })}
 
               {/* Master Hover Tooltip for Avatar Pins (Follows Avatar Rotation) */}
               {hoveredItem &&
@@ -591,33 +562,6 @@ export function Scene({
         </div>
       </div>
 
-      {/* Floating Interactive Canvas Guidance Banner */}
-      {!isGuidanceDismissed && !focusedItem && (
-        <div
-          className="absolute top-4 left-1/2 transform -translate-x-1/2 max-w-lg w-auto mx-4 bg-slate-900/90 hover:bg-slate-900 text-white backdrop-blur-md px-4 py-2 rounded-full border border-slate-700/80 shadow-lg flex items-center gap-3 text-xs z-20 animate-in fade-in slide-in-from-top-2"
-          onPointerDown={(e) => e.stopPropagation()}
-        >
-          <div className="w-5 h-5 rounded-full bg-teal-500/20 text-teal-400 flex items-center justify-center shrink-0">
-            <Sparkles className="w-3 h-3" />
-          </div>
-          <span className="text-[11.5px] leading-tight text-slate-200">
-            Click any marker on your 3D avatar to inspect details, procedures, or linked medications.
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              setIsGuidanceDismissed(true);
-              try { sessionStorage.setItem("dismiss_canvas_guidance", "true"); } catch (_) {}
-            }}
-            className="p-1 rounded-full hover:bg-slate-800 text-slate-400 hover:text-white transition-colors"
-            title="Dismiss guidance banner"
-            aria-label="Dismiss guidance"
-          >
-            <X className="w-3.5 h-3.5" />
-          </button>
-        </div>
-      )}
-
       {/* Category Legend: Positioned at bottom-center */}
       <div
         className="absolute bottom-4 left-1/2 transform -translate-x-1/2 px-4 py-1.5 rounded-full shadow-md border flex items-center gap-4 text-xs font-semibold z-10 bg-white/95 border-slate-200 text-slate-700 flex-wrap justify-center"
@@ -651,13 +595,6 @@ export function Scene({
             <span className="w-1.5 h-1.5 rounded-full bg-amber-600" />
           </span>
           <span className="text-amber-700 font-medium">Conditions</span>
-        </div>
-        {/* Procedures */}
-        <div className="flex items-center gap-1.5">
-          <span className="w-3.5 h-3.5 rounded-full border-2 border-sky-600 bg-sky-50 flex items-center justify-center">
-            <span className="w-1.5 h-1.5 rounded-full bg-sky-600" />
-          </span>
-          <span className="text-sky-700 font-medium">Procedures</span>
         </div>
         {/* Medications */}
         <div className="flex items-center gap-1.5">

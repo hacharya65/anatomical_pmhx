@@ -12,6 +12,7 @@ import {
   Sun,
   Moon
 } from "lucide-react";
+import { calculateAge } from "../../lib/clinicalCatalog";
 
 export function Sidebar({
   activeTab,
@@ -64,7 +65,7 @@ export function Sidebar({
                 </span>
               </div>
               <div className={`text-xs mt-0.5 ${isLight ? "text-slate-500" : "text-slate-400"}`}>
-                DOB: {profile.dob} • Age: {profile.age} yo
+                DOB: {profile.dob} • Age: {calculateAge(profile.dob, profile.age || 58)} yo
               </div>
             </div>
           </div>
