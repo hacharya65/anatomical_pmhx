@@ -1,4 +1,4 @@
-import React, { useState, useRef } from "react";
+import React, { useState, useRef, useMemo } from "react";
 import {
   X,
   Sparkles,
@@ -16,7 +16,16 @@ import {
   ShieldCheck,
   User,
   Trash2,
-  Plus
+  Plus,
+  Search,
+  Check,
+  Stethoscope,
+  Syringe,
+  Layers,
+  MapPin,
+  Calendar,
+  Building2,
+  Info
 } from "lucide-react";
 import * as pdfjsLib from "pdfjs-dist";
 import pdfWorkerUrl from "pdfjs-dist/build/pdf.worker.min.mjs?url";
@@ -24,6 +33,123 @@ import { CLINICAL_CATALOG } from "../../lib/clinicalCatalog";
 
 // Configure pdfjs worker client-side
 pdfjsLib.GlobalWorkerOptions.workerSrc = pdfWorkerUrl;
+
+// Predefined catalogs and lookups
+const COMMON_ALLERGIC_DRUGS = [
+  "Penicillin",
+  "Amoxicillin",
+  "Sulfa / Bactrim (TMP-SMX)",
+  "Ciprofloxacin (Cipro)",
+  "Cephalosporins (Keflex)",
+  "Morphine Sulfate",
+  "Codeine",
+  "Aspirin / NSAIDs (Ibuprofen)",
+  "Lisinopril / ACE Inhibitors",
+  "IV Contrast Dye (Iodine)",
+  "Latex"
+];
+
+const REACTION_TYPES = [
+  "Anaphylaxis / Airway Closure",
+  "Rash / Hives (Urticaria)",
+  "Angioedema (Lip / Facial Swelling)",
+  "GI Upset / Nausea / Vomiting",
+  "Respiratory / Wheezing",
+  "Severe Itching (Pruritus)",
+  "Other"
+];
+
+const ANATOMICAL_REGIONS = [
+  { id: "head_neck", label: "Head & Neck", coords: { x: 0.0, y: 7.0, z: 0.7 }, system: "neurologic", isPosterior: false },
+  { id: "chest_cardiac", label: "Chest & Heart (Cardiac)", coords: { x: 0.3, y: 4.2, z: 1.1 }, system: "cardiac", isPosterior: false },
+  { id: "lungs_respiratory", label: "Lungs & Respiratory", coords: { x: -0.6, y: 4.5, z: 0.9 }, system: "respiratory", isPosterior: false },
+  { id: "upper_gi_liver", label: "Upper Abdomen & Liver / Gallbladder", coords: { x: -0.7, y: 2.8, z: 0.9 }, system: "digestive", isPosterior: false },
+  { id: "stomach_esophagus", label: "Stomach & Esophagus (Acid Reflux)", coords: { x: 0.2, y: 3.2, z: 0.95 }, system: "digestive", isPosterior: false },
+  { id: "lower_bowel", label: "Lower Abdomen & Colon / Bowel", coords: { x: 0.0, y: 1.4, z: 0.9 }, system: "digestive", isPosterior: false },
+  { id: "pelvis_urinary", label: "Pelvis & Bladder / Urinary", coords: { x: 0.0, y: 0.3, z: 0.9 }, system: "pelvic", isPosterior: false },
+  { id: "spine_back", label: "Spine & Lower Back (Posterior)", coords: { x: 0.0, y: 2.0, z: -0.9 }, system: "spine", isPosterior: true },
+  { id: "right_arm", label: "Right Shoulder & Arm", coords: { x: -2.3, y: 4.2, z: 0.5 }, system: "orthopedic", isPosterior: false },
+  { id: "left_arm", label: "Left Shoulder & Arm", coords: { x: 2.3, y: 4.2, z: 0.5 }, system: "orthopedic", isPosterior: false },
+  { id: "right_leg", label: "Right Hip, Knee & Leg", coords: { x: -1.0, y: -3.8, z: 0.8 }, system: "orthopedic_knee", isPosterior: false },
+  { id: "left_leg", label: "Left Hip, Knee & Leg", coords: { x: 1.0, y: -3.8, z: 0.8 }, system: "orthopedic_hip", isPosterior: false },
+  { id: "general_systemic", label: "General / Systemic / Endocrine", coords: { x: 0.0, y: 3.5, z: 1.0 }, system: "endocrine", isPosterior: false }
+];
+
+const ALPHABETICAL_COMMON_MEDICATIONS = [
+  "Acetaminophen (Tylenol)",
+  "Albuterol (ProAir / Ventolin)",
+  "Allopurinol (Zyloprim)",
+  "Amlodipine (Norvasc)",
+  "Amoxicillin",
+  "Apixaban (Eliquis)",
+  "Aspirin (Bayer / Ecotrin)",
+  "Atorvastatin (Lipitor)",
+  "Bupropion (Wellbutrin)",
+  "Carvedilol (Coreg)",
+  "Celecoxib (Celebrex)",
+  "Citalopram (Celexa)",
+  "Clopidogrel (Plavix)",
+  "Duloxetine (Cymbalta)",
+  "Escitalopram (Lexapro)",
+  "Furosemide (Lasix)",
+  "Gabapentin (Neurontin)",
+  "Hydrochlorothiazide (HCTZ)",
+  "Ibuprofen (Advil / Motrin)",
+  "Latanoprost (Xalatan)",
+  "Levothyroxine (Synthroid)",
+  "Lisinopril (Zestril)",
+  "Losartan (Cozaar)",
+  "Meloxicam (Mobic)",
+  "Metformin (Glucophage)",
+  "Metoprolol Succinate (Toprol-XL)",
+  "Metoprolol Tartrate (Lopressor)",
+  "Omeprazole (Prilosec)",
+  "Pantoprazole (Protonix)",
+  "Rosuvastatin (Crestor)",
+  "Sertraline (Zoloft)",
+  "Spironolactone (Aldactone)",
+  "Tamsulosin (Flomax)",
+  "Tramadol (Ultram)",
+  "Warfarin (Coumadin)"
+].sort();
+
+const COMMON_PROCEDURES = [
+  { name: "Screening Colonoscopy", plainName: "Colonoscopy (Colon Exam)", marker: "Lower Bowel / Colon", type: "diagnostic", recall: 10, findings: "Normal colonic mucosa without polyps or active inflammation." },
+  { name: "Upper Endoscopy (EGD)", plainName: "Stomach Camera Exam (EGD)", marker: "Esophagus / Stomach", type: "diagnostic", recall: 3, findings: "Mild non-erosive erythematous gastropathy; duodenum normal." },
+  { name: "Transthoracic Echocardiogram (TTE)", plainName: "Heart Ultrasound (Echo)", marker: "Heart / Thorax", type: "diagnostic", recall: 1, findings: "Normal LV cavity size, LVEF 55-60%, trace mitral regurgitation." },
+  { name: "Screening Mammogram (Bilateral)", plainName: "Breast Cancer Screening (Mammogram)", marker: "Bilateral Breast Tissue", type: "screening", recall: 1, findings: "BI-RADS 1: Negative for suspicious microcalcifications or masses." },
+  { name: "Low-Dose Chest CT Scan", plainName: "Lung Screening CT Scan", marker: "Bilateral Lung Fields", type: "diagnostic", recall: 1, findings: "Clear lung parenchyma without pulmonary nodules or focal consolidation." },
+  { name: "DEXA Bone Mineral Density Scan", plainName: "Bone Density Scan (Osteoporosis)", marker: "Lumbar Spine & Femoral Neck", type: "screening", recall: 2, findings: "T-score -1.6 at L1-L4; osteopenia without fracture." },
+  { name: "Cardiac Stress Test (SPECT)", plainName: "Heart Stress Test", marker: "Myocardial Perfusion", type: "diagnostic", recall: 3, findings: "No inducible ischemia; normal baseline exercise tolerance." },
+  { name: "Abdominal Ultrasound", plainName: "Abdominal Ultrasound (Liver/Gallbladder)", marker: "Right Upper Quadrant", type: "diagnostic", recall: 2, findings: "Normal hepatic echotexture; no cholelithiasis or biliary dilation." }
+];
+
+const COMMON_VACCINES = [
+  { name: "Influenza (Annual Flu Vaccine)", plainName: "Flu Shot (Annual)", category: "Seasonal Respiratory", intervalYears: 1 },
+  { name: "COVID-19 (Updated mRNA Vaccine)", plainName: "COVID-19 Updated Booster", category: "Viral Respiratory", intervalYears: 1 },
+  { name: "Tdap (Tetanus, Diphtheria, Pertussis)", plainName: "Tetanus & Whooping Cough Booster", category: "Bacterial Toxoid", intervalYears: 10 },
+  { name: "Shingrix (Zoster Recombinant)", plainName: "Shingles Vaccine (2-Dose Series)", category: "Herpes Zoster", intervalYears: 99 },
+  { name: "Pneumococcal (PCV20 / Prevnar 20)", plainName: "Pneumonia Vaccine", category: "Pneumococcal", intervalYears: 99 },
+  { name: "Hepatitis B Recombinant Vaccine", plainName: "Hepatitis B Liver Vaccine", category: "Viral Hepatitis", intervalYears: 99 },
+  { name: "MMR (Measles, Mumps, Rubella)", plainName: "MMR Vaccine", category: "Childhood Viral", intervalYears: 99 },
+  { name: "HPV (Human Papillomavirus / Gardasil 9)", plainName: "HPV Cancer Prevention Vaccine", category: "Viral Onco-Prevention", intervalYears: 99 }
+];
+
+const isArthroplastyOrSided = (surgName = "") => {
+  const lower = surgName.toLowerCase();
+  return (
+    lower.includes("replacement") ||
+    lower.includes("arthroplasty") ||
+    lower.includes("knee") ||
+    lower.includes("hip") ||
+    lower.includes("shoulder") ||
+    lower.includes("carpal") ||
+    lower.includes("cataract") ||
+    lower.includes("hernia") ||
+    lower.includes("rotator") ||
+    lower.includes("mastectomy")
+  );
+};
 
 export function PatientOnboardingModal({
   isOpen,
@@ -36,24 +162,86 @@ export function PatientOnboardingModal({
   // View state: "choice" | "wizard" | "pdf_upload" | "pdf_review"
   const [viewMode, setViewMode] = useState("choice");
 
-  // Wizard Step: 1 (Demographics) -> 2 (Conditions) -> 3 (Surgeries) -> 4 (Meds) -> 5 (Procedures) -> 6 (Vaccines) -> 7 (Review)
+  // Wizard Step: 1 (Demographics/Allergies) -> 2 (Conditions) -> 3 (Surgeries) -> 4 (Meds) -> 5 (Procedures) -> 6 (Vaccines) -> 7 (Review)
   const [wizardStep, setWizardStep] = useState(1);
 
-  // Wizard Draft State
-  const [draftProfile, setDraftProfile] = useState({
-    name: initialProfile.name || "",
-    dob: initialProfile.dob || "1980-01-01",
-    sex: initialProfile.sex || "female",
-    bloodType: initialProfile.bloodType || "O Positive",
-    allergies: initialProfile.allergies || "No Known Drug Allergies (NKDA)",
-    emergencyContact: initialProfile.emergencyContact || ""
+  // STEP 1 STATE: Split names, demographics & structured allergies
+  const initialNames = (initialProfile.name || "").trim().split(" ");
+  const [firstName, setFirstName] = useState(initialNames[0] || "");
+  const [lastName, setLastName] = useState(initialNames.slice(1).join(" ") || "");
+  const [dob, setDob] = useState(initialProfile.dob || "1980-01-01");
+  const [sex, setSex] = useState(initialProfile.sex || "female");
+  const [bloodType, setBloodType] = useState(initialProfile.bloodType || "O Positive");
+  const [emergencyContact, setEmergencyContact] = useState(initialProfile.emergencyContact || "");
+
+  // Multi-entry structured drug allergies
+  const [isNkda, setIsNkda] = useState(false);
+  const [allergiesList, setAllergiesList] = useState([
+    {
+      id: `allg-${Date.now()}`,
+      drugName: "",
+      reactionType: "Rash / Hives (Urticaria)",
+      approximateDate: ""
+    }
+  ]);
+
+  // STEP 2 STATE: Conditions (selected + custom addition)
+  const [conditionSearch, setConditionSearch] = useState("");
+  const [selectedConditions, setSelectedConditions] = useState([]);
+  const [isAddingCustomCond, setIsAddingCustomCond] = useState(false);
+  const [customCond, setCustomCond] = useState({
+    name: "",
+    regionId: "general_systemic",
+    onsetDate: new Date().getFullYear().toString(),
+    notes: ""
   });
 
-  const [selectedConditions, setSelectedConditions] = useState([]);
+  // STEP 3 STATE: Surgeries (with conditional orthopedic / arthroplasty branching)
+  const [surgerySearch, setSurgerySearch] = useState("");
   const [selectedSurgeries, setSelectedSurgeries] = useState([]);
+  const [isAddingCustomSurg, setIsAddingCustomSurg] = useState(false);
+  const [customSurg, setCustomSurg] = useState({
+    name: "",
+    site: "Right Knee Joint",
+    surgeryDate: new Date().getFullYear().toString(),
+    hospital: "",
+    surgeon: "",
+    laterality: "Right",
+    approach: "Total",
+    hardwareNotes: "",
+    notes: ""
+  });
+
+  // STEP 4 STATE: Medications (decoupled alphabetical + progressive disclosure)
+  const [medSearch, setMedSearch] = useState("");
   const [selectedMeds, setSelectedMeds] = useState([]);
+  const [isAddingCustomMed, setIsAddingCustomMed] = useState(false);
+  const [customMedName, setCustomMedName] = useState("");
+
+  // STEP 5 STATE: Procedures (structured fields: findings, recall, etc.)
+  const [procSearch, setProcSearch] = useState("");
   const [selectedProcedures, setSelectedProcedures] = useState([]);
+  const [isAddingCustomProc, setIsAddingCustomProc] = useState(false);
+  const [customProc, setCustomProc] = useState({
+    name: "",
+    type: "diagnostic",
+    datePerformed: new Date().toISOString().split("T")[0],
+    physician: "",
+    facility: "",
+    findings: "",
+    recallYears: 1
+  });
+
+  // STEP 6 STATE: Vaccines (with optional lot numbers)
+  const [vaxSearch, setVaxSearch] = useState("");
   const [selectedVaccines, setSelectedVaccines] = useState([]);
+  const [isAddingCustomVax, setIsAddingCustomVax] = useState(false);
+  const [customVax, setCustomVax] = useState({
+    name: "",
+    dateAdministered: new Date().toISOString().split("T")[0],
+    clinic: "",
+    lotNumber: ""
+  });
 
   // PDF Upload State
   const [isParsingPdf, setIsParsingPdf] = useState(false);
@@ -67,108 +255,383 @@ export function PatientOnboardingModal({
     procedures: [],
     vaccines: []
   });
-
   const fileInputRef = useRef(null);
 
-  // Custom addition fields for wizard
-  const [customCondName, setCustomCondName] = useState("");
-  const [customSurgName, setCustomSurgName] = useState("");
-  const [customMedName, setCustomMedName] = useState("");
+  /* -------------------------------------------------------------
+     ALLERGY SUBFORM HANDLERS
+  ------------------------------------------------------------- */
+  const handleAddAllergyRow = () => {
+    setAllergiesList((prev) => [
+      ...prev,
+      {
+        id: `allg-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+        drugName: "",
+        reactionType: "Rash / Hives (Urticaria)",
+        approximateDate: ""
+      }
+    ]);
+    setIsNkda(false);
+  };
+
+  const handleUpdateAllergyRow = (id, field, value) => {
+    setAllergiesList((prev) =>
+      prev.map((a) => (a.id === id ? { ...a, [field]: value } : a))
+    );
+  };
+
+  const handleRemoveAllergyRow = (id) => {
+    setAllergiesList((prev) => prev.filter((a) => a.id !== id));
+  };
+
+  const handleToggleNkda = (checked) => {
+    setIsNkda(checked);
+    if (checked) {
+      setAllergiesList([]);
+    } else {
+      setAllergiesList([
+        {
+          id: `allg-${Date.now()}`,
+          drugName: "",
+          reactionType: "Rash / Hives (Urticaria)",
+          approximateDate: ""
+        }
+      ]);
+    }
+  };
 
   /* -------------------------------------------------------------
-     PATH A: GUIDED WIZARD HELPERS
+     STEP 2: CONDITIONS HANDLERS
   ------------------------------------------------------------- */
-  const toggleCondition = (item) => {
-    if (selectedConditions.some((c) => c.id === item.id)) {
-      setSelectedConditions((prev) => prev.filter((c) => c.id !== item.id));
+  const toggleConditionPreset = (cond) => {
+    if (selectedConditions.some((c) => c.name === cond.name)) {
+      setSelectedConditions((prev) => prev.filter((c) => c.name !== cond.name));
     } else {
       setSelectedConditions((prev) => [
         ...prev,
         {
-          id: item.id || `cond-${Date.now()}`,
-          name: item.name,
-          plainName: item.plainName,
-          region: item.region,
-          coords: item.coords,
-          system: item.system,
-          icd10: item.icd10,
-          onsetDate: new Date().toISOString().split("T")[0],
-          status: "Active",
-          notes: item.notes || ""
+          id: cond.id || `cond-${Date.now()}`,
+          name: cond.name,
+          plainName: cond.plainName,
+          region: cond.region,
+          coords: cond.coords,
+          system: cond.system,
+          icd10: cond.icd10,
+          onsetDate: new Date().getFullYear().toString(),
+          provider: "",
+          notes: cond.notes || ""
         }
       ]);
     }
   };
 
-  const toggleSurgery = (item) => {
-    if (selectedSurgeries.some((s) => s.id === item.id)) {
-      setSelectedSurgeries((prev) => prev.filter((s) => s.id !== item.id));
+  const handleSaveCustomCondition = () => {
+    if (!customCond.name.trim()) return;
+    const regionObj = ANATOMICAL_REGIONS.find((r) => r.id === customCond.regionId) || ANATOMICAL_REGIONS[ANATOMICAL_REGIONS.length - 1];
+    const newCond = {
+      id: `cond-custom-${Date.now()}`,
+      name: customCond.name.trim(),
+      plainName: customCond.name.trim(),
+      region: regionObj.label,
+      coords: regionObj.coords,
+      system: regionObj.system,
+      isPosterior: regionObj.isPosterior || false,
+      onsetDate: customCond.onsetDate || new Date().getFullYear().toString(),
+      provider: "",
+      notes: customCond.notes || "Custom entered condition."
+    };
+    setSelectedConditions((prev) => [...prev, newCond]);
+    setCustomCond({ name: "", regionId: "general_systemic", onsetDate: new Date().getFullYear().toString(), notes: "" });
+    setIsAddingCustomCond(false);
+  };
+
+  /* -------------------------------------------------------------
+     STEP 3: SURGERIES HANDLERS
+  ------------------------------------------------------------- */
+  const toggleSurgeryPreset = (surg) => {
+    if (selectedSurgeries.some((s) => s.name === surg.name)) {
+      setSelectedSurgeries((prev) => prev.filter((s) => s.name !== surg.name));
     } else {
+      const isSided = isArthroplastyOrSided(surg.name);
       setSelectedSurgeries((prev) => [
         ...prev,
         {
-          id: item.id || `surg-${Date.now()}`,
-          name: item.name,
-          plainName: item.plainName,
-          site: item.site,
-          incision: item.incision,
-          coords: item.coords,
-          system: item.system,
-          isPosterior: item.isPosterior || false,
-          surgeryDate: "2022-01-01",
-          hospital: item.hospital || "Community Hospital",
-          notes: item.notes || ""
+          id: surg.id || `surg-${Date.now()}`,
+          name: surg.name,
+          plainName: surg.plainName,
+          site: surg.site,
+          incision: surg.incision,
+          coords: surg.coords,
+          system: surg.system,
+          isPosterior: surg.isPosterior || false,
+          surgeryDate: "2022",
+          hospital: surg.hospital || "",
+          surgeon: surg.surgeon || "",
+          notes: surg.notes || "",
+          // Branching fields
+          isSided,
+          laterality: isSided ? "Right" : "Bilateral",
+          approach: isSided ? "Total" : "Standard Open",
+          hardwareNotes: ""
         }
       ]);
     }
   };
 
-  const toggleProcedure = (item) => {
-    if (selectedProcedures.some((p) => p.id === item.id)) {
-      setSelectedProcedures((prev) => prev.filter((p) => p.id !== item.id));
+  const handleUpdateSurgeryField = (id, field, value) => {
+    setSelectedSurgeries((prev) =>
+      prev.map((s) => {
+        if (s.id !== id) return s;
+        const updated = { ...s, [field]: value };
+        // If laterality changes, flip X coordinate if needed
+        if (field === "laterality" && updated.coords) {
+          if (value === "Right" && updated.coords.x > 0) {
+            updated.coords = { ...updated.coords, x: -Math.abs(updated.coords.x) };
+          } else if (value === "Left" && updated.coords.x < 0) {
+            updated.coords = { ...updated.coords, x: Math.abs(updated.coords.x) };
+          }
+        }
+        return updated;
+      })
+    );
+  };
+
+  const handleSaveCustomSurgery = () => {
+    if (!customSurg.name.trim()) return;
+    const isSided = isArthroplastyOrSided(customSurg.name);
+    let coords = { x: -0.82, y: -4.55, z: 0.82 };
+    if (customSurg.laterality === "Left") coords = { x: 0.82, y: -4.55, z: 0.82 };
+
+    const newSurg = {
+      id: `surg-custom-${Date.now()}`,
+      name: customSurg.name.trim(),
+      plainName: customSurg.name.trim(),
+      site: customSurg.site || "General Surgical Site",
+      incision: "Surgical Incision Scar",
+      coords,
+      system: "orthopedic",
+      surgeryDate: customSurg.surgeryDate || new Date().getFullYear().toString(),
+      hospital: customSurg.hospital || "",
+      surgeon: customSurg.surgeon || "",
+      isSided,
+      laterality: customSurg.laterality,
+      approach: customSurg.approach,
+      hardwareNotes: customSurg.hardwareNotes,
+      notes: customSurg.notes || ""
+    };
+    setSelectedSurgeries((prev) => [...prev, newSurg]);
+    setCustomSurg({
+      name: "",
+      site: "Right Knee Joint",
+      surgeryDate: new Date().getFullYear().toString(),
+      hospital: "",
+      surgeon: "",
+      laterality: "Right",
+      approach: "Total",
+      hardwareNotes: "",
+      notes: ""
+    });
+    setIsAddingCustomSurg(false);
+  };
+
+  /* -------------------------------------------------------------
+     STEP 4: MEDICATIONS HANDLERS
+  ------------------------------------------------------------- */
+  const toggleMedicationItem = (drugName) => {
+    if (selectedMeds.some((m) => m.name.toLowerCase() === drugName.toLowerCase())) {
+      setSelectedMeds((prev) => prev.filter((m) => m.name.toLowerCase() !== drugName.toLowerCase()));
+    } else {
+      setSelectedMeds((prev) => [
+        ...prev,
+        {
+          id: `med-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          name: drugName,
+          doseNumber: "10",
+          doseUnit: "mg",
+          dosage: "10 mg",
+          frequency: "Once daily (QD)",
+          startDate: new Date().getFullYear().toString(),
+          indication: selectedConditions[0]?.name || "General Health Maintenance",
+          customIndication: "",
+          route: "Oral (PO)"
+        }
+      ]);
+    }
+  };
+
+  const handleUpdateMedicationField = (id, field, value) => {
+    setSelectedMeds((prev) =>
+      prev.map((m) => {
+        if (m.id !== id) return m;
+        const updated = { ...m, [field]: value };
+        if (field === "doseNumber" || field === "doseUnit") {
+          const num = field === "doseNumber" ? value : m.doseNumber;
+          const unit = field === "doseUnit" ? value : m.doseUnit;
+          updated.dosage = `${num} ${unit}`.trim();
+        }
+        return updated;
+      })
+    );
+  };
+
+  const handleAddCustomMedication = () => {
+    if (!customMedName.trim()) return;
+    toggleMedicationItem(customMedName.trim());
+    setCustomMedName("");
+    setIsAddingCustomMed(false);
+  };
+
+  /* -------------------------------------------------------------
+     STEP 5: PROCEDURES HANDLERS
+  ------------------------------------------------------------- */
+  const toggleProcedurePreset = (proc) => {
+    if (selectedProcedures.some((p) => p.procedure_name === proc.name)) {
+      setSelectedProcedures((prev) => prev.filter((p) => p.procedure_name !== proc.name));
     } else {
       setSelectedProcedures((prev) => [
         ...prev,
         {
-          id: item.id || `proc-${Date.now()}`,
-          procedure_name: item.name,
-          plainName: item.plainName,
-          procedure_type: item.procedure_type || "diagnostic",
+          id: `proc-${Date.now()}`,
+          procedure_name: proc.name,
+          plainName: proc.plainName,
+          procedure_type: proc.type,
           date_performed: new Date().toISOString().split("T")[0],
-          anatomical_marker: item.anatomical_marker || "General",
-          coords: item.coords,
-          system: item.system,
-          recall_interval_years: item.defaultRecallYears || 1,
-          findings: item.findingsSummary || ""
+          anatomical_marker: proc.marker,
+          performing_clinician: "",
+          institution: "",
+          findings: proc.findings,
+          recall_interval_years: proc.recall
         }
       ]);
     }
   };
 
-  const toggleVaccine = (item) => {
-    if (selectedVaccines.some((v) => v.id === item.id)) {
-      setSelectedVaccines((prev) => prev.filter((v) => v.id !== item.id));
+  const handleUpdateProcedureField = (id, field, value) => {
+    setSelectedProcedures((prev) =>
+      prev.map((p) => (p.id === id ? { ...p, [field]: value } : p))
+    );
+  };
+
+  const handleSaveCustomProcedure = () => {
+    if (!customProc.name.trim()) return;
+    setSelectedProcedures((prev) => [
+      ...prev,
+      {
+        id: `proc-custom-${Date.now()}`,
+        procedure_name: customProc.name.trim(),
+        plainName: customProc.name.trim(),
+        procedure_type: customProc.type,
+        date_performed: customProc.datePerformed || new Date().toISOString().split("T")[0],
+        anatomical_marker: "General Diagnostic Site",
+        performing_clinician: customProc.physician || "",
+        institution: customProc.facility || "",
+        findings: customProc.findings || "Routine diagnostic study performed.",
+        recall_interval_years: Number(customProc.recallYears) || 1
+      }
+    ]);
+    setCustomProc({
+      name: "",
+      type: "diagnostic",
+      datePerformed: new Date().toISOString().split("T")[0],
+      physician: "",
+      facility: "",
+      findings: "",
+      recallYears: 1
+    });
+    setIsAddingCustomProc(false);
+  };
+
+  /* -------------------------------------------------------------
+     STEP 6: VACCINES HANDLERS
+  ------------------------------------------------------------- */
+  const toggleVaccinePreset = (vax) => {
+    if (selectedVaccines.some((v) => v.vaccine_name === vax.name)) {
+      setSelectedVaccines((prev) => prev.filter((v) => v.vaccine_name !== vax.name));
     } else {
       setSelectedVaccines((prev) => [
         ...prev,
         {
-          id: item.id || `vax-${Date.now()}`,
-          vaccine_name: item.name,
-          plainName: item.plainName,
+          id: `vax-${Date.now()}`,
+          vaccine_name: vax.name,
+          plainName: vax.plainName,
           date_administered: new Date().toISOString().split("T")[0],
           dose_number: 1,
-          administering_facility: "Local Health Facility"
+          administering_facility: "Local Health Center",
+          lot_number: ""
         }
       ]);
     }
   };
 
+  const handleUpdateVaccineField = (id, field, value) => {
+    setSelectedVaccines((prev) =>
+      prev.map((v) => (v.id === id ? { ...v, [field]: value } : v))
+    );
+  };
+
+  const handleSaveCustomVaccine = () => {
+    if (!customVax.name.trim()) return;
+    setSelectedVaccines((prev) => [
+      ...prev,
+      {
+        id: `vax-custom-${Date.now()}`,
+        vaccine_name: customVax.name.trim(),
+        plainName: customVax.name.trim(),
+        date_administered: customVax.dateAdministered || new Date().toISOString().split("T")[0],
+        dose_number: 1,
+        administering_facility: customVax.clinic || "Clinic / Pharmacy",
+        lot_number: customVax.lotNumber || ""
+      }
+    ]);
+    setCustomVax({
+      name: "",
+      dateAdministered: new Date().toISOString().split("T")[0],
+      clinic: "",
+      lotNumber: ""
+    });
+    setIsAddingCustomVax(false);
+  };
+
+  /* -------------------------------------------------------------
+     BATCH COMMIT (FINISH WIZARD)
+  ------------------------------------------------------------- */
   const handleFinishWizard = () => {
+    const fullName = `${firstName.trim()} ${lastName.trim()}`.trim() || "Elena Vance";
+
+    // Format structured allergies for demographics
+    const formattedAllergiesList = isNkda
+      ? []
+      : allergiesList
+          .filter((a) => a.drugName.trim().length > 0)
+          .map((a) => ({
+            id: a.id,
+            medication: a.drugName.trim(),
+            drugName: a.drugName.trim(),
+            reaction: a.reactionType,
+            severity: a.reactionType.includes("Anaphylaxis") ? "Severe" : "Moderate",
+            dateDocumented: a.approximateDate || new Date().getFullYear().toString(),
+            status: "Active"
+          }));
+
+    // Process medications with final indications
+    const finalizedMeds = selectedMeds.map((m) => ({
+      ...m,
+      dosage: m.dosage || `${m.doseNumber || "10"} ${m.doseUnit || "mg"}`,
+      indication: m.indication === "Other" && m.customIndication ? m.customIndication : m.indication
+    }));
+
     onBatchCommit({
-      profile: draftProfile,
+      profile: {
+        name: fullName,
+        dob,
+        sex,
+        bloodType,
+        emergencyContact
+      },
+      isNkda,
+      allergiesList: formattedAllergiesList,
       conditions: selectedConditions,
       surgeries: selectedSurgeries,
-      medications: selectedMeds,
+      medications: finalizedMeds,
       procedures: selectedProcedures,
       vaccinations: selectedVaccines
     });
@@ -176,7 +639,7 @@ export function PatientOnboardingModal({
   };
 
   /* -------------------------------------------------------------
-     PATH B: SMART HEALTH RECORD PDF EXTRACTOR (100% Client-Side)
+     PDF EXTRACTION HANDLERS
   ------------------------------------------------------------- */
   const handlePdfFileSelect = async (e) => {
     const file = e.target.files?.[0];
@@ -204,7 +667,7 @@ export function PatientOnboardingModal({
         fullText += "\n" + pageText;
       }
 
-      // Regex / keyword extraction across clinical text
+      // Extraction across clinical text
       const extracted = parseClinicalText(fullText);
       setExtractedData(extracted);
       setViewMode("pdf_review");
@@ -218,8 +681,6 @@ export function PatientOnboardingModal({
 
   const parseClinicalText = (text) => {
     const rawLower = text.toLowerCase();
-
-    // 1. Patient Demographics matching
     const profile = {};
     const nameMatch = text.match(/(?:patient\s+name|name)[:\s]+([A-Z][a-z]+(?:\s+[A-Z][a-z]+)+)/i);
     if (nameMatch) profile.name = nameMatch[1].trim();
@@ -227,15 +688,11 @@ export function PatientOnboardingModal({
     const dobMatch = text.match(/(?:dob|date\s+of\s+birth|birthdate)[:\s]+([0-9]{1,2}[/-][0-9]{1,2}[/-][0-9]{2,4})/i);
     if (dobMatch) profile.dob = dobMatch[1].trim();
 
-    const mrnMatch = text.match(/(?:mrn|record\s*#)[:\s]+([A-Z0-9-]+)/i);
-    if (mrnMatch) profile.mrn = mrnMatch[1].trim();
-
-    // 2. Conditions matching against catalog
     const matchedConditions = [];
     (CLINICAL_CATALOG.conditions || []).forEach((c) => {
       const plain = (c.plainName || "").toLowerCase();
       const clinical = c.name.toLowerCase();
-      if (rawLower.includes(clinical) || rawLower.includes(plain)) {
+      if (rawLower.includes(clinical) || (plain && rawLower.includes(plain))) {
         matchedConditions.push({
           id: `cond-pdf-${c.id}`,
           name: c.name,
@@ -244,19 +701,18 @@ export function PatientOnboardingModal({
           coords: c.coords,
           system: c.system,
           icd10: c.icd10,
-          onsetDate: new Date().toISOString().split("T")[0],
+          onsetDate: new Date().getFullYear().toString(),
           status: "Active",
-          notes: "Extracted from uploaded health record"
+          notes: "Extracted from uploaded health record."
         });
       }
     });
 
-    // 3. Surgeries matching against catalog
     const matchedSurgeries = [];
     (CLINICAL_CATALOG.surgeries || []).forEach((s) => {
       const plain = (s.plainName || "").toLowerCase();
       const clinical = s.name.toLowerCase();
-      if (rawLower.includes(clinical) || rawLower.includes(plain)) {
+      if (rawLower.includes(clinical) || (plain && rawLower.includes(plain))) {
         matchedSurgeries.push({
           id: `surg-pdf-${s.id}`,
           name: s.name,
@@ -266,65 +722,54 @@ export function PatientOnboardingModal({
           coords: s.coords,
           system: s.system,
           isPosterior: s.isPosterior || false,
-          surgeryDate: "2023-01-01",
+          surgeryDate: "2022",
           hospital: "Medical Center",
-          notes: "Extracted from uploaded health record"
+          notes: "Extracted from uploaded health record."
         });
       }
     });
 
-    // 4. Medications matching against catalog
     const matchedMeds = [];
-    (CLINICAL_CATALOG.medications || []).forEach((m) => {
-      if (rawLower.includes(m.name.toLowerCase())) {
+    ALPHABETICAL_COMMON_MEDICATIONS.forEach((m) => {
+      const baseName = m.split("(")[0].trim().toLowerCase();
+      if (rawLower.includes(baseName)) {
         matchedMeds.push({
-          id: `med-pdf-${m.id}`,
-          name: m.name,
-          dosage: m.dosage,
-          route: m.route,
-          frequency: m.frequency,
-          indication: m.indication,
-          startDate: new Date().toISOString().split("T")[0],
-          prescriber: "Primary Care",
-          system: m.system
+          id: `med-pdf-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
+          name: m,
+          dosage: "Standard Dose",
+          frequency: "Once daily (QD)",
+          startDate: new Date().getFullYear().toString(),
+          indication: "General Indication"
         });
       }
     });
 
-    // 5. Procedures matching
     const matchedProcs = [];
-    (CLINICAL_CATALOG.procedures || []).forEach((p) => {
-      const plain = (p.plainName || "").toLowerCase();
-      const clinical = p.name.toLowerCase();
-      if (rawLower.includes(clinical) || rawLower.includes(plain)) {
+    COMMON_PROCEDURES.forEach((p) => {
+      if (rawLower.includes(p.name.toLowerCase()) || rawLower.includes(p.plainName.toLowerCase())) {
         matchedProcs.push({
-          id: `proc-pdf-${p.id}`,
+          id: `proc-pdf-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
           procedure_name: p.name,
           plainName: p.plainName,
-          procedure_type: p.procedure_type || "diagnostic",
+          procedure_type: p.type,
           date_performed: new Date().toISOString().split("T")[0],
-          anatomical_marker: p.anatomical_marker || "General",
-          coords: p.coords,
-          system: p.system,
-          recall_interval_years: p.defaultRecallYears || 1,
-          findings: p.findingsSummary || "Record reviewed; routine findings"
+          anatomical_marker: p.marker,
+          findings: p.findings,
+          recall_interval_years: p.recall
         });
       }
     });
 
-    // 6. Vaccines matching
     const matchedVaccines = [];
-    (CLINICAL_CATALOG.vaccines || []).forEach((v) => {
-      const plain = (v.plainName || "").toLowerCase();
-      const clinical = v.name.toLowerCase();
-      if (rawLower.includes(clinical) || rawLower.includes(plain)) {
+    COMMON_VACCINES.forEach((v) => {
+      if (rawLower.includes(v.name.toLowerCase()) || rawLower.includes(v.plainName.toLowerCase())) {
         matchedVaccines.push({
-          id: `vax-pdf-${v.id}`,
+          id: `vax-pdf-${Date.now()}-${Math.random().toString(36).substr(2, 4)}`,
           vaccine_name: v.name,
           plainName: v.plainName,
           date_administered: new Date().toISOString().split("T")[0],
           dose_number: 1,
-          administering_facility: "Documented on Record"
+          administering_facility: "Medical Center Clinic"
         });
       }
     });
@@ -341,7 +786,15 @@ export function PatientOnboardingModal({
 
   const handleFinishPdfImport = () => {
     onBatchCommit({
-      profile: { ...draftProfile, ...(extractedData.profile || {}) },
+      profile: {
+        name: extractedData.profile?.name || `${firstName} ${lastName}`.trim() || "Elena Vance",
+        dob: extractedData.profile?.dob || dob,
+        sex,
+        bloodType,
+        emergencyContact
+      },
+      isNkda: false,
+      allergiesList: [],
       conditions: extractedData.conditions,
       surgeries: extractedData.surgeries,
       medications: extractedData.medications,
@@ -351,34 +804,76 @@ export function PatientOnboardingModal({
     onClose();
   };
 
+  /* -------------------------------------------------------------
+     FILTERED SEARCH LISTS
+  ------------------------------------------------------------- */
+  const filteredConditions = useMemo(() => {
+    const list = CLINICAL_CATALOG.conditions || [];
+    if (!conditionSearch.trim()) return list.slice(0, 16);
+    const q = conditionSearch.toLowerCase();
+    return list.filter(
+      (c) =>
+        c.name.toLowerCase().includes(q) ||
+        (c.plainName && c.plainName.toLowerCase().includes(q)) ||
+        (c.region && c.region.toLowerCase().includes(q))
+    );
+  }, [conditionSearch]);
+
+  const filteredSurgeries = useMemo(() => {
+    const list = CLINICAL_CATALOG.surgeries || [];
+    if (!surgerySearch.trim()) return list.slice(0, 14);
+    const q = surgerySearch.toLowerCase();
+    return list.filter(
+      (s) =>
+        s.name.toLowerCase().includes(q) ||
+        (s.plainName && s.plainName.toLowerCase().includes(q)) ||
+        (s.site && s.site.toLowerCase().includes(q))
+    );
+  }, [surgerySearch]);
+
+  const filteredMedications = useMemo(() => {
+    if (!medSearch.trim()) return ALPHABETICAL_COMMON_MEDICATIONS;
+    const q = medSearch.toLowerCase();
+    return ALPHABETICAL_COMMON_MEDICATIONS.filter((m) => m.toLowerCase().includes(q));
+  }, [medSearch]);
+
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-950/70 backdrop-blur-xs animate-in fade-in duration-200">
-      <div className="relative w-full max-w-2xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col max-h-[90vh] overflow-hidden">
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-teal-600 text-white flex items-center justify-center shadow-xs">
-              <Sparkles className="w-4 h-4" />
+      {/* Modal Container expanded to max-w-5xl */}
+      <div className="relative w-full max-w-5xl bg-white dark:bg-slate-900 rounded-2xl shadow-2xl border border-slate-200 dark:border-slate-800 flex flex-col h-[90vh] max-h-[92vh] overflow-hidden">
+        
+        {/* Modal Header */}
+        <div className="flex items-center justify-between px-6 py-4 border-b border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 shrink-0">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-teal-600 text-white flex items-center justify-center shadow-xs">
+              <Sparkles className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
-                {viewMode === "choice" && "Welcome to Your Health Avatar"}
-                {viewMode === "wizard" && `Guided Health Intake (Step ${wizardStep} of 6)`}
-                {viewMode === "pdf_upload" && "Smart Health Record Import"}
-                {viewMode === "pdf_review" && "Verify Extracted Health Data"}
-              </h2>
-              <p className="text-xs text-slate-500 dark:text-slate-400">
-                {viewMode === "choice" && "Choose how you would like to set up your personal health history"}
-                {viewMode === "wizard" && "Plain language step-by-step patient questionnaire"}
-                {viewMode === "pdf_upload" && "100% private, on-device document extraction"}
-                {viewMode === "pdf_review" && "Review and select items to populate on your 3D avatar"}
+              <div className="flex items-center gap-2">
+                <h2 className="text-base font-bold text-slate-900 dark:text-white leading-tight">
+                  {viewMode === "choice" && "Welcome to Your Interactive Health Avatar"}
+                  {viewMode === "wizard" && `Patient Health Intake (Step ${wizardStep} of 6)`}
+                  {viewMode === "pdf_upload" && "Smart Health Record Import"}
+                  {viewMode === "pdf_review" && "Verify Extracted Health Data"}
+                </h2>
+                {viewMode === "wizard" && (
+                  <span className="text-[11px] font-semibold px-2 py-0.5 rounded-full bg-teal-100 text-teal-800 dark:bg-teal-950 dark:text-teal-300 border border-teal-200 dark:border-teal-800">
+                    Dual Terminology Enabled
+                  </span>
+                )}
+              </div>
+              <p className="text-xs text-slate-500 dark:text-slate-400 mt-0.5">
+                {viewMode === "choice" && "Select an intake method to calibrate your personalized 3D medical history"}
+                {viewMode === "wizard" && "Structured questionnaire with Grade 6–8 plain language guidance"}
+                {viewMode === "pdf_upload" && "100% private, on-device parsing with zero sensitive data egress"}
+                {viewMode === "pdf_review" && "Review findings extracted from your clinical summary"}
               </p>
             </div>
           </div>
           <button
             type="button"
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors"
+            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-200/60 dark:hover:bg-slate-800 transition-colors"
           >
             <X className="w-5 h-5" />
           </button>
@@ -388,72 +883,82 @@ export function PatientOnboardingModal({
         <div className="flex-1 overflow-y-auto p-6">
           {/* VIEW 1: CHOICE SCREEN */}
           {viewMode === "choice" && (
-            <div className="space-y-6">
-              <div className="text-center max-w-md mx-auto mb-2">
-                <h3 className="text-lg font-bold text-slate-800 dark:text-slate-100">
-                  Build Your Interactive 3D Medical Record
+            <div className="space-y-6 max-w-3xl mx-auto my-auto py-4">
+              <div className="text-center mb-6">
+                <span className="text-[11px] uppercase tracking-wider font-bold text-teal-700 bg-teal-50 border border-teal-200 px-3 py-1 rounded-full">
+                  Getting Started
+                </span>
+                <h3 className="text-xl font-bold text-slate-900 dark:text-white mt-3">
+                  How would you like to build your 3D health avatar?
                 </h3>
-                <p className="text-xs text-slate-500 mt-1">
-                  Visually track your medical conditions, surgical scars, diagnostic procedures, and vaccines in one unified view.
+                <p className="text-xs text-slate-500 mt-1 max-w-lg mx-auto">
+                  Populate your clinical profile, active conditions, surgical scars, medications, and routine screenings.
                 </p>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-                {/* Option A: Guided Step-by-Step Intake Wizard */}
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Guided Intake Option */}
                 <button
                   type="button"
                   onClick={() => setViewMode("wizard")}
-                  className="group p-5 rounded-xl border-2 border-teal-600/30 hover:border-teal-600 bg-teal-50/30 hover:bg-teal-50/60 dark:bg-slate-800/60 dark:hover:bg-teal-950/20 text-left transition-all flex flex-col justify-between shadow-xs hover:shadow-md"
+                  className="group p-6 rounded-2xl border-2 border-teal-600/30 hover:border-teal-600 bg-teal-50/40 hover:bg-teal-50/70 dark:bg-slate-800/60 dark:hover:bg-teal-950/30 text-left transition-all flex flex-col justify-between shadow-xs hover:shadow-lg hover:-translate-y-0.5"
                 >
                   <div>
-                    <div className="w-10 h-10 rounded-xl bg-teal-600 text-white flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
-                      <Activity className="w-5 h-5" />
+                    <div className="w-12 h-12 rounded-xl bg-teal-600 text-white flex items-center justify-center mb-4 group-hover:scale-105 transition-transform shadow-xs">
+                      <Activity className="w-6 h-6" />
                     </div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Guided Step-by-Step Intake
-                    </h4>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed">
-                      Answer a simple series of questions with plain language translations (Grade 6–8 readability) for medical conditions, surgeries, and prescriptions.
+                    <div className="flex items-center gap-2">
+                      <h4 className="text-sm font-bold text-slate-900 dark:text-white">
+                        Guided Step-by-Step Intake
+                      </h4>
+                      <span className="text-[10px] font-bold bg-teal-200/80 text-teal-900 px-2 py-0.5 rounded-full">
+                        Recommended
+                      </span>
+                    </div>
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                      Structured 6-step questionnaire with plain language definitions, orthopedic laterality checks, and custom dosing controls.
                     </p>
                   </div>
-                  <div className="mt-4 flex items-center gap-1 text-xs font-bold text-teal-700 dark:text-teal-400">
+                  <div className="mt-6 flex items-center gap-1.5 text-xs font-bold text-teal-700 dark:text-teal-400">
                     <span>Start Guided Intake</span>
-                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </button>
 
-                {/* Option B: Smart Health Record PDF Upload */}
+                {/* PDF Upload Option */}
                 <button
                   type="button"
                   onClick={() => setViewMode("pdf_upload")}
-                  className="group p-5 rounded-xl border-2 border-indigo-600/30 hover:border-indigo-600 bg-indigo-50/30 hover:bg-indigo-50/60 dark:bg-slate-800/60 dark:hover:bg-indigo-950/20 text-left transition-all flex flex-col justify-between shadow-xs hover:shadow-md"
+                  className="group p-6 rounded-2xl border-2 border-indigo-600/30 hover:border-indigo-600 bg-indigo-50/40 hover:bg-indigo-50/70 dark:bg-slate-800/60 dark:hover:bg-indigo-950/30 text-left transition-all flex flex-col justify-between shadow-xs hover:shadow-lg hover:-translate-y-0.5"
                 >
                   <div>
-                    <div className="w-10 h-10 rounded-xl bg-indigo-600 text-white flex items-center justify-center mb-3 group-hover:scale-105 transition-transform">
-                      <Upload className="w-5 h-5" />
+                    <div className="w-12 h-12 rounded-xl bg-indigo-600 text-white flex items-center justify-center mb-4 group-hover:scale-105 transition-transform shadow-xs">
+                      <Upload className="w-6 h-6" />
                     </div>
-                    <div className="flex items-center gap-1.5">
+                    <div className="flex items-center gap-2">
                       <h4 className="text-sm font-bold text-slate-900 dark:text-white">
                         Smart PDF Record Upload
                       </h4>
-                      <span className="text-[9px] font-bold bg-indigo-100 text-indigo-800 px-1.5 py-0.2 rounded">Fast</span>
+                      <span className="text-[10px] font-bold bg-indigo-200/80 text-indigo-900 px-2 py-0.5 rounded-full">
+                        Automated
+                      </span>
                     </div>
-                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-1.5 leading-relaxed">
-                      Upload your patient summary, discharge paperwork, or clinic notes. Automatically detects diagnoses, procedures, and medications on your device.
+                    <p className="text-xs text-slate-600 dark:text-slate-400 mt-2 leading-relaxed">
+                      Upload clinical visit summaries or discharge papers. Automatically detects diagnoses and tests 100% locally on your computer.
                     </p>
                   </div>
-                  <div className="mt-4 flex items-center gap-1 text-xs font-bold text-indigo-700 dark:text-indigo-400">
-                    <span>Upload Medical PDF</span>
-                    <ArrowRight className="w-3.5 h-3.5 group-hover:translate-x-1 transition-transform" />
+                  <div className="mt-6 flex items-center gap-1.5 text-xs font-bold text-indigo-700 dark:text-indigo-400">
+                    <span>Upload Medical Record</span>
+                    <ArrowRight className="w-4 h-4 group-hover:translate-x-1 transition-transform" />
                   </div>
                 </button>
               </div>
 
-              {/* Privacy Guarantee */}
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-2.5 text-xs text-slate-600 dark:text-slate-400">
-                <Shield className="w-4 h-4 text-teal-600 shrink-0" />
+              {/* Strict Privacy Card */}
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/60 rounded-xl border border-slate-200 dark:border-slate-800 flex items-center gap-3 text-xs text-slate-600 dark:text-slate-400">
+                <ShieldCheck className="w-5 h-5 text-teal-600 shrink-0" />
                 <span>
-                  <strong>Strict Privacy Guarantee:</strong> Your health records and documents are processed 100% locally on your device without sending sensitive documents to external AI servers.
+                  <strong>Strict Privacy & Zero PHI Egress:</strong> Your health information is rendered and processed completely inside your web browser. No document files or personal details are ever transferred to third-party AI APIs.
                 </span>
               </div>
             </div>
@@ -461,288 +966,1361 @@ export function PatientOnboardingModal({
 
           {/* VIEW 2: GUIDED WIZARD */}
           {viewMode === "wizard" && (
-            <div className="space-y-5">
-              {/* Step Progress Pills */}
-              <div className="flex items-center justify-between gap-1 pb-3 border-b border-slate-100 dark:border-slate-800 text-[11px] font-semibold text-slate-500">
-                <span className={wizardStep === 1 ? "text-teal-700 font-bold" : ""}>1. About You</span>
-                <span>•</span>
-                <span className={wizardStep === 2 ? "text-teal-700 font-bold" : ""}>2. Conditions</span>
-                <span>•</span>
-                <span className={wizardStep === 3 ? "text-teal-700 font-bold" : ""}>3. Surgeries</span>
-                <span>•</span>
-                <span className={wizardStep === 4 ? "text-teal-700 font-bold" : ""}>4. Medications</span>
-                <span>•</span>
-                <span className={wizardStep === 5 ? "text-teal-700 font-bold" : ""}>5. Procedures</span>
-                <span>•</span>
-                <span className={wizardStep === 6 ? "text-teal-700 font-bold" : ""}>6. Vaccines</span>
+            <div className="space-y-6">
+              {/* Wizard Progress Stepper Bar */}
+              <div className="grid grid-cols-6 gap-2 pb-4 border-b border-slate-200 dark:border-slate-800">
+                {[
+                  { step: 1, title: "Demographics & Allergies", sub: "Profile" },
+                  { step: 2, title: "Medical Conditions", sub: "Diagnoses" },
+                  { step: 3, title: "Past Surgeries", sub: "Incisions & Joints" },
+                  { step: 4, title: "Medications", sub: "Active Rx & Dosing" },
+                  { step: 5, title: "Procedures", sub: "Diagnostic Tests" },
+                  { step: 6, title: "Vaccines", sub: "Immunizations" }
+                ].map((item) => {
+                  const isActive = wizardStep === item.step;
+                  const isCompleted = wizardStep > item.step;
+                  return (
+                    <button
+                      key={item.step}
+                      type="button"
+                      onClick={() => setWizardStep(item.step)}
+                      className={`text-left p-2 rounded-xl transition-all border ${
+                        isActive
+                          ? "bg-teal-50 border-teal-600 dark:bg-teal-950/40 dark:border-teal-500 shadow-xs ring-1 ring-teal-500"
+                          : isCompleted
+                          ? "bg-slate-50 border-slate-200 dark:bg-slate-800/50 dark:border-slate-700 hover:bg-slate-100"
+                          : "bg-transparent border-transparent opacity-60"
+                      }`}
+                    >
+                      <div className="flex items-center gap-1.5">
+                        <span
+                          className={`w-4 h-4 rounded-full text-[10px] font-bold flex items-center justify-center shrink-0 ${
+                            isActive
+                              ? "bg-teal-600 text-white"
+                              : isCompleted
+                              ? "bg-teal-100 text-teal-800"
+                              : "bg-slate-200 text-slate-600"
+                          }`}
+                        >
+                          {isCompleted ? "✓" : item.step}
+                        </span>
+                        <span className={`text-xs font-bold truncate ${isActive ? "text-teal-900 dark:text-teal-200" : "text-slate-700 dark:text-slate-300"}`}>
+                          {item.sub}
+                        </span>
+                      </div>
+                      <div className="text-[10px] text-slate-500 truncate mt-0.5 pl-5">
+                        {item.title}
+                      </div>
+                    </button>
+                  );
+                })}
               </div>
 
-              {/* STEP 1: ABOUT YOU */}
+              {/* -------------------------------------------------------------
+                  STEP 1: DEMOGRAPHICS & STRUCTURED ALLERGY INTAKE
+              ------------------------------------------------------------- */}
               {wizardStep === 1 && (
-                <div className="space-y-4">
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Step 1: Basic Demographics
-                  </h4>
-                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Full Name
-                      </label>
-                      <input
-                        type="text"
-                        value={draftProfile.name}
-                        onChange={(e) => setDraftProfile((p) => ({ ...p, name: e.target.value }))}
-                        placeholder="e.g. John Doe"
-                        className="w-full px-3 py-2 text-xs border rounded-lg dark:bg-slate-800 dark:border-slate-700"
-                      />
+                <div className="space-y-6 animate-in fade-in duration-150">
+                  <div className="border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                      <User className="w-4 h-4 text-teal-600" />
+                      <span>Step 1: Patient Demographics & Granular Allergy Intake</span>
+                    </h3>
+                    <p className="text-xs text-slate-500 mt-1">
+                      Configure your identity and document all adverse drug reactions to establish allergy safety rules.
+                    </p>
+                  </div>
+
+                  {/* Demographics Grid */}
+                  <div className="bg-slate-50/60 dark:bg-slate-800/40 p-4 rounded-2xl border border-slate-200 dark:border-slate-700/80">
+                    <h4 className="text-xs font-bold uppercase tracking-wider text-slate-700 dark:text-slate-300 mb-3">
+                      Basic Information
+                    </h4>
+                    <div className="grid grid-cols-1 md:grid-cols-4 gap-4">
+                      {/* First Name */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          First Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={firstName}
+                          onChange={(e) => setFirstName(e.target.value)}
+                          placeholder="e.g. Elena"
+                          className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-teal-500 focus:outline-hidden font-medium"
+                        />
+                      </div>
+
+                      {/* Last Name */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Last Name <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="text"
+                          value={lastName}
+                          onChange={(e) => setLastName(e.target.value)}
+                          placeholder="e.g. Vance"
+                          className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-teal-500 focus:outline-hidden font-medium"
+                        />
+                      </div>
+
+                      {/* Date of Birth */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Date of Birth <span className="text-rose-500">*</span>
+                        </label>
+                        <input
+                          type="date"
+                          value={dob}
+                          onChange={(e) => setDob(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-teal-500 focus:outline-hidden font-medium"
+                        />
+                      </div>
+
+                      {/* Biological Sex */}
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Biological Sex / Model View
+                        </label>
+                        <select
+                          value={sex}
+                          onChange={(e) => setSex(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700 focus:ring-2 focus:ring-teal-500 focus:outline-hidden font-medium"
+                        >
+                          <option value="female">Female (Anatomical Model)</option>
+                          <option value="male">Male (Anatomical Model)</option>
+                        </select>
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Date of Birth
-                      </label>
-                      <input
-                        type="date"
-                        value={draftProfile.dob}
-                        onChange={(e) => setDraftProfile((p) => ({ ...p, dob: e.target.value }))}
-                        className="w-full px-3 py-2 text-xs border rounded-lg dark:bg-slate-800 dark:border-slate-700"
-                      />
+
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mt-3 pt-3 border-t border-slate-200/60 dark:border-slate-700/60">
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Blood Type (Optional)
+                        </label>
+                        <select
+                          value={bloodType}
+                          onChange={(e) => setBloodType(e.target.value)}
+                          className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                        >
+                          <option value="O Positive">O Positive (O+)</option>
+                          <option value="O Negative">O Negative (O-)</option>
+                          <option value="A Positive">A Positive (A+)</option>
+                          <option value="A Negative">A Negative (A-)</option>
+                          <option value="B Positive">B Positive (B+)</option>
+                          <option value="B Negative">B Negative (B-)</option>
+                          <option value="AB Positive">AB Positive (AB+)</option>
+                          <option value="AB Negative">AB Negative (AB-)</option>
+                        </select>
+                      </div>
+                      <div>
+                        <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
+                          Emergency Contact & Phone (Optional)
+                        </label>
+                        <input
+                          type="text"
+                          value={emergencyContact}
+                          onChange={(e) => setEmergencyContact(e.target.value)}
+                          placeholder="e.g. David Vance (Spouse) - (617) 555-0143"
+                          className="w-full px-3 py-2 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                        />
+                      </div>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Biological Sex / Model Gender
+                  </div>
+
+                  {/* Granular Multi-Entry Allergy Subform */}
+                  <div className="bg-rose-50/40 dark:bg-rose-950/20 p-5 rounded-2xl border border-rose-200 dark:border-rose-900/60">
+                    <div className="flex items-center justify-between mb-3">
+                      <div>
+                        <h4 className="text-xs font-bold uppercase tracking-wider text-rose-800 dark:text-rose-300 flex items-center gap-1.5">
+                          <Shield className="w-3.5 h-3.5" />
+                          <span>Structured Drug Allergies & Adverse Reactions</span>
+                        </h4>
+                        <p className="text-[11px] text-slate-500 mt-0.5">
+                          Specify each medication, the reaction experienced, and approximate year.
+                        </p>
+                      </div>
+
+                      {/* NKDA Toggle */}
+                      <label className="flex items-center gap-2 cursor-pointer bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-slate-200 dark:border-slate-700 shadow-2xs">
+                        <input
+                          type="checkbox"
+                          checked={isNkda}
+                          onChange={(e) => handleToggleNkda(e.target.checked)}
+                          className="rounded text-teal-600 focus:ring-teal-500 w-3.5 h-3.5"
+                        />
+                        <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                          No Known Drug Allergies (NKDA)
+                        </span>
                       </label>
-                      <select
-                        value={draftProfile.sex}
-                        onChange={(e) => setDraftProfile((p) => ({ ...p, sex: e.target.value }))}
-                        className="w-full px-3 py-2 text-xs border rounded-lg dark:bg-slate-800 dark:border-slate-700"
-                      >
-                        <option value="female">Female</option>
-                        <option value="male">Male</option>
-                      </select>
                     </div>
-                    <div>
-                      <label className="block text-xs font-semibold text-slate-700 dark:text-slate-300 mb-1">
-                        Known Drug Allergies
-                      </label>
-                      <input
-                        type="text"
-                        value={draftProfile.allergies}
-                        onChange={(e) => setDraftProfile((p) => ({ ...p, allergies: e.target.value }))}
-                        placeholder="e.g. Penicillin, Sulfa, or NKDA"
-                        className="w-full px-3 py-2 text-xs border rounded-lg dark:bg-slate-800 dark:border-slate-700"
-                      />
-                    </div>
+
+                    {!isNkda && (
+                      <div className="space-y-3">
+                        {allergiesList.map((allergy, index) => (
+                          <div
+                            key={allergy.id}
+                            className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-rose-100 dark:border-rose-900/40 shadow-2xs grid grid-cols-1 md:grid-cols-12 gap-2.5 items-center"
+                          >
+                            {/* Drug Name with Autocomplete datalist */}
+                            <div className="md:col-span-5">
+                              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                Medication / Drug Name
+                              </label>
+                              <input
+                                type="text"
+                                list={`allergy-drugs-${index}`}
+                                value={allergy.drugName}
+                                onChange={(e) => handleUpdateAllergyRow(allergy.id, "drugName", e.target.value)}
+                                placeholder="e.g. Penicillin, Sulfa, Morphine"
+                                className="w-full px-2.5 py-1.5 text-xs border rounded-lg dark:bg-slate-800 dark:border-slate-700 font-medium"
+                              />
+                              <datalist id={`allergy-drugs-${index}`}>
+                                {COMMON_ALLERGIC_DRUGS.map((d) => (
+                                  <option key={d} value={d} />
+                                ))}
+                              </datalist>
+                            </div>
+
+                            {/* Reaction Type */}
+                            <div className="md:col-span-4">
+                              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                Reaction Type
+                              </label>
+                              <select
+                                value={allergy.reactionType}
+                                onChange={(e) => handleUpdateAllergyRow(allergy.id, "reactionType", e.target.value)}
+                                className="w-full px-2.5 py-1.5 text-xs border rounded-lg dark:bg-slate-800 dark:border-slate-700"
+                              >
+                                {REACTION_TYPES.map((r) => (
+                                  <option key={r} value={r}>
+                                    {r}
+                                  </option>
+                                ))}
+                              </select>
+                            </div>
+
+                            {/* Approximate Date / Year */}
+                            <div className="md:col-span-2">
+                              <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                Approx. Year
+                              </label>
+                              <input
+                                type="text"
+                                value={allergy.approximateDate}
+                                onChange={(e) => handleUpdateAllergyRow(allergy.id, "approximateDate", e.target.value)}
+                                placeholder="e.g. 2018"
+                                className="w-full px-2.5 py-1.5 text-xs border rounded-lg dark:bg-slate-800 dark:border-slate-700 text-center"
+                              />
+                            </div>
+
+                            {/* Delete Action */}
+                            <div className="md:col-span-1 flex justify-end pt-3 md:pt-0">
+                              <button
+                                type="button"
+                                onClick={() => handleRemoveAllergyRow(allergy.id)}
+                                disabled={allergiesList.length === 1}
+                                className="p-1.5 rounded-lg text-slate-400 hover:text-rose-600 hover:bg-rose-50 dark:hover:bg-rose-950 transition-colors disabled:opacity-30"
+                                title="Remove allergy row"
+                              >
+                                <Trash2 className="w-4 h-4" />
+                              </button>
+                            </div>
+                          </div>
+                        ))}
+
+                        <div className="pt-2 flex items-center justify-between">
+                          <button
+                            type="button"
+                            onClick={handleAddAllergyRow}
+                            className="flex items-center gap-1.5 text-xs font-bold text-rose-700 dark:text-rose-300 hover:text-rose-900 bg-white dark:bg-slate-900 px-3 py-1.5 rounded-lg border border-rose-200 dark:border-rose-900 shadow-2xs hover:bg-rose-50 transition-all"
+                          >
+                            <Plus className="w-3.5 h-3.5" />
+                            <span>Add Another Drug Allergy</span>
+                          </button>
+                          <span className="text-[11px] text-slate-500">
+                            {allergiesList.filter((a) => a.drugName.trim()).length} recorded
+                          </span>
+                        </div>
+                      </div>
+                    )}
                   </div>
                 </div>
               )}
 
-              {/* STEP 2: MEDICAL CONDITIONS */}
+              {/* -------------------------------------------------------------
+                  STEP 2: MEDICAL CONDITIONS (CATALOG + CUSTOM)
+              ------------------------------------------------------------- */}
               {wizardStep === 2 && (
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Step 2: Have you been diagnosed with any of these conditions?
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      Select all that apply. Each item includes both common plain terms and clinical diagnoses.
-                    </p>
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Activity className="w-4 h-4 text-teal-600" />
+                        <span>Step 2: Have you been diagnosed with any medical conditions?</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Select from common medical diagnoses or enter custom health conditions with anatomical regions.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingCustomCond(!isAddingCustomCond)}
+                      className="flex items-center gap-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-2xs transition-all shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{isAddingCustomCond ? "Close Custom Form" : "Add Custom Condition"}</span>
+                    </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
-                    {(CLINICAL_CATALOG.conditions || []).slice(0, 12).map((cond) => {
-                      const isSelected = selectedConditions.some((c) => c.name === cond.name);
-                      return (
+
+                  {/* Inline Custom Condition Form */}
+                  {isAddingCustomCond && (
+                    <div className="p-4 rounded-2xl bg-teal-50/50 dark:bg-teal-950/20 border-2 border-teal-500/40 space-y-3">
+                      <h4 className="text-xs font-bold text-teal-950 dark:text-teal-200">
+                        Add Custom Medical Condition
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Condition Name <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={customCond.name}
+                            onChange={(e) => setCustomCond((c) => ({ ...c, name: e.target.value }))}
+                            placeholder="e.g. Raynaud's Phenomenon"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Body Region / 3D Avatar Location
+                          </label>
+                          <select
+                            value={customCond.regionId}
+                            onChange={(e) => setCustomCond((c) => ({ ...c, regionId: e.target.value }))}
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          >
+                            {ANATOMICAL_REGIONS.map((r) => (
+                              <option key={r.id} value={r.id}>
+                                {r.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Year Diagnosed
+                          </label>
+                          <input
+                            type="text"
+                            value={customCond.onsetDate}
+                            onChange={(e) => setCustomCond((c) => ({ ...c, onsetDate: e.target.value }))}
+                            placeholder="e.g. 2021"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <input
+                          type="text"
+                          value={customCond.notes}
+                          onChange={(e) => setCustomCond((c) => ({ ...c, notes: e.target.value }))}
+                          placeholder="Optional clinical notes or symptoms..."
+                          className="flex-1 mr-3 px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                        />
                         <button
+                          type="button"
+                          onClick={handleSaveCustomCondition}
+                          disabled={!customCond.name.trim()}
+                          className="bg-teal-700 hover:bg-teal-800 disabled:opacity-40 text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow-sm"
+                        >
+                          Save Condition
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={conditionSearch}
+                      onChange={(e) => setConditionSearch(e.target.value)}
+                      placeholder="Search common conditions (e.g. Hypertension, GERD, Osteoarthritis, Asthma)..."
+                      className="w-full pl-9 pr-4 py-2 text-xs border rounded-xl bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 focus:outline-hidden focus:ring-2 focus:ring-teal-500"
+                    />
+                  </div>
+
+                  {/* Grid of Common Conditions */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-2.5 max-h-[360px] overflow-y-auto pr-1">
+                    {filteredConditions.map((cond) => {
+                      const selectedItem = selectedConditions.find((c) => c.name === cond.name);
+                      const isSelected = !!selectedItem;
+
+                      return (
+                        <div
                           key={cond.id}
-                          type="button"
-                          onClick={() => toggleCondition(cond)}
-                          className={`p-2.5 rounded-lg border text-left transition-all flex items-start justify-between gap-2 ${
+                          className={`p-3 rounded-xl border transition-all ${
                             isSelected
-                              ? "bg-teal-50 border-teal-600 text-teal-900 dark:bg-teal-950/40 dark:border-teal-500 dark:text-teal-200 shadow-2xs font-medium"
-                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-700 dark:text-slate-300"
+                              ? "bg-teal-50/80 border-teal-600 dark:bg-teal-950/40 dark:border-teal-500 shadow-2xs"
+                              : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-slate-300"
                           }`}
                         >
-                          <div className="min-w-0">
-                            <div className="text-xs font-bold">{cond.plainName || cond.name}</div>
-                            <div className="text-[10px] text-slate-500">{cond.name} • {cond.region}</div>
+                          <div
+                            onClick={() => toggleConditionPreset(cond)}
+                            className="flex items-start justify-between gap-2 cursor-pointer"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                                {cond.plainName || cond.name}
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                <span className="font-semibold">{cond.name}</span> • {cond.region}
+                              </div>
+                            </div>
+                            <div
+                              className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${
+                                isSelected ? "bg-teal-600 border-teal-600 text-white" : "border-slate-300 bg-white dark:bg-slate-900"
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                            </div>
                           </div>
-                          <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${isSelected ? "bg-teal-600 border-teal-600 text-white" : "border-slate-300"}`}>
-                            {isSelected && <CheckCircle2 className="w-3 h-3" />}
-                          </div>
-                        </button>
+
+                          {/* Reveal diagnosis year and clinician inputs when checked */}
+                          {isSelected && (
+                            <div className="mt-2.5 pt-2.5 border-t border-teal-200/60 dark:border-teal-800/60 grid grid-cols-2 gap-2">
+                              <div>
+                                <label className="block text-[10px] font-bold text-teal-950 dark:text-teal-200 mb-0.5">
+                                  Diagnosis Year
+                                </label>
+                                <input
+                                  type="text"
+                                  value={selectedItem.onsetDate || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setSelectedConditions((prev) =>
+                                      prev.map((c) => (c.name === cond.name ? { ...c, onsetDate: val } : c))
+                                    );
+                                  }}
+                                  placeholder="e.g. 2019"
+                                  className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-teal-300 dark:border-teal-700"
+                                />
+                              </div>
+                              <div>
+                                <label className="block text-[10px] font-bold text-teal-950 dark:text-teal-200 mb-0.5">
+                                  Clinician / Hospital
+                                </label>
+                                <input
+                                  type="text"
+                                  value={selectedItem.provider || ""}
+                                  onChange={(e) => {
+                                    const val = e.target.value;
+                                    setSelectedConditions((prev) =>
+                                      prev.map((c) => (c.name === cond.name ? { ...c, provider: val } : c))
+                                    );
+                                  }}
+                                  placeholder="e.g. Dr. Adams / Mass General"
+                                  className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-teal-300 dark:border-teal-700"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
                 </div>
               )}
 
-              {/* STEP 3: PAST SURGERIES */}
+              {/* -------------------------------------------------------------
+                  STEP 3: PAST SURGERIES & CONDITIONAL ORTHOPEDIC GRANULARITY
+              ------------------------------------------------------------- */}
               {wizardStep === 3 && (
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Step 3: Have you had any past surgeries or incision scars?
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      Surgical scars and implants will be accurately positioned on your 3D avatar.
-                    </p>
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Heart className="w-4 h-4 text-indigo-600" />
+                        <span>Step 3: Past Surgeries, Joint Replacements & Incision Scars</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Select previous procedures. For joint replacements or side-dependent surgeries, configure laterality and approach.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingCustomSurg(!isAddingCustomSurg)}
+                      className="flex items-center gap-1.5 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-2xs transition-all shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{isAddingCustomSurg ? "Close Custom Form" : "Add Custom Surgery"}</span>
+                    </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
-                    {(CLINICAL_CATALOG.surgeries || []).slice(0, 10).map((surg) => {
-                      const isSelected = selectedSurgeries.some((s) => s.name === surg.name);
-                      return (
+
+                  {/* Inline Custom Surgery Form */}
+                  {isAddingCustomSurg && (
+                    <div className="p-4 rounded-2xl bg-indigo-50/50 dark:bg-indigo-950/20 border-2 border-indigo-500/40 space-y-3">
+                      <h4 className="text-xs font-bold text-indigo-950 dark:text-indigo-200">
+                        Add Custom Surgical Procedure
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Procedure Name <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={customSurg.name}
+                            onChange={(e) => setCustomSurg((s) => ({ ...s, name: e.target.value }))}
+                            placeholder="e.g. Total Shoulder Arthroplasty"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Laterality / Side
+                          </label>
+                          <div className="flex rounded-lg border border-slate-300 dark:border-slate-700 overflow-hidden text-xs">
+                            {["Left", "Right", "Bilateral"].map((side) => (
+                              <button
+                                key={side}
+                                type="button"
+                                onClick={() => setCustomSurg((s) => ({ ...s, laterality: side }))}
+                                className={`flex-1 py-1.5 font-bold transition-all ${
+                                  customSurg.laterality === side
+                                    ? "bg-indigo-600 text-white"
+                                    : "bg-white dark:bg-slate-900 text-slate-700 hover:bg-slate-50"
+                                }`}
+                              >
+                                {side}
+                              </button>
+                            ))}
+                          </div>
+                        </div>
+
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Year Performed
+                          </label>
+                          <input
+                            type="text"
+                            value={customSurg.surgeryDate}
+                            onChange={(e) => setCustomSurg((s) => ({ ...s, surgeryDate: e.target.value }))}
+                            placeholder="e.g. 2022"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3 pt-1">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Surgeon & Hospital / Facility
+                          </label>
+                          <input
+                            type="text"
+                            value={customSurg.hospital}
+                            onChange={(e) => setCustomSurg((s) => ({ ...s, hospital: e.target.value }))}
+                            placeholder="e.g. Dr. Sterling / New England Orthopedic"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Implant / Hardware Notes (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={customSurg.hardwareNotes}
+                            onChange={(e) => setCustomSurg((s) => ({ ...s, hardwareNotes: e.target.value }))}
+                            placeholder="e.g. Titanium stem, cross-linked polyethylene"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-1">
                         <button
+                          type="button"
+                          onClick={handleSaveCustomSurgery}
+                          disabled={!customSurg.name.trim()}
+                          className="bg-indigo-700 hover:bg-indigo-800 disabled:opacity-40 text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow-sm"
+                        >
+                          Save Surgery
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Search Bar */}
+                  <div className="relative">
+                    <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                    <input
+                      type="text"
+                      value={surgerySearch}
+                      onChange={(e) => setSurgerySearch(e.target.value)}
+                      placeholder="Search surgeries (e.g. Knee Replacement, Appendectomy, CABG, Cataract, Cholecystectomy)..."
+                      className="w-full pl-9 pr-4 py-2 text-xs border rounded-xl bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 focus:outline-hidden focus:ring-2 focus:ring-indigo-500"
+                    />
+                  </div>
+
+                  {/* Grid of Common Surgeries with Conditional Branching */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto pr-1">
+                    {filteredSurgeries.map((surg) => {
+                      const selectedItem = selectedSurgeries.find((s) => s.name === surg.name);
+                      const isSelected = !!selectedItem;
+                      const isSided = isArthroplastyOrSided(surg.name);
+
+                      return (
+                        <div
                           key={surg.id}
-                          type="button"
-                          onClick={() => toggleSurgery(surg)}
-                          className={`p-2.5 rounded-lg border text-left transition-all flex items-start justify-between gap-2 ${
+                          className={`p-3.5 rounded-xl border transition-all ${
                             isSelected
-                              ? "bg-indigo-50 border-indigo-600 text-indigo-900 dark:bg-indigo-950/40 dark:border-indigo-500 dark:text-indigo-200 shadow-2xs font-medium"
-                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-700 dark:text-slate-300"
+                              ? "bg-indigo-50/80 border-indigo-600 dark:bg-indigo-950/40 dark:border-indigo-500 shadow-2xs"
+                              : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-slate-300"
                           }`}
                         >
-                          <div className="min-w-0">
-                            <div className="text-xs font-bold">{surg.plainName || surg.name}</div>
-                            <div className="text-[10px] text-slate-500">{surg.site}</div>
+                          <div
+                            onClick={() => toggleSurgeryPreset(surg)}
+                            className="flex items-start justify-between gap-2 cursor-pointer"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                                {surg.plainName || surg.name}
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                <span className="font-semibold">{surg.name}</span> • {surg.site}
+                              </div>
+                            </div>
+                            <div
+                              className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${
+                                isSelected ? "bg-indigo-600 border-indigo-600 text-white" : "border-slate-300 bg-white dark:bg-slate-900"
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                            </div>
                           </div>
-                          <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${isSelected ? "bg-indigo-600 border-indigo-600 text-white" : "border-slate-300"}`}>
-                            {isSelected && <CheckCircle2 className="w-3 h-3" />}
-                          </div>
-                        </button>
+
+                          {/* Conditional Branching Fields for Orthopedic / Sided Surgeries */}
+                          {isSelected && (
+                            <div className="mt-3 pt-3 border-t border-indigo-200/60 dark:border-indigo-800/60 space-y-2.5">
+                              {isSided && (
+                                <div className="grid grid-cols-2 gap-2">
+                                  {/* Laterality Toggle */}
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-indigo-950 dark:text-indigo-200 mb-1">
+                                      Laterality (Side)
+                                    </label>
+                                    <div className="flex rounded border border-indigo-300 dark:border-indigo-700 overflow-hidden text-[11px]">
+                                      {["Left", "Right", "Bilateral"].map((side) => (
+                                        <button
+                                          key={side}
+                                          type="button"
+                                          onClick={() => handleUpdateSurgeryField(selectedItem.id, "laterality", side)}
+                                          className={`flex-1 py-1 font-bold transition-all ${
+                                            selectedItem.laterality === side
+                                              ? "bg-indigo-600 text-white"
+                                              : "bg-white dark:bg-slate-900 text-slate-700 hover:bg-slate-100"
+                                          }`}
+                                        >
+                                          {side}
+                                        </button>
+                                      ))}
+                                    </div>
+                                  </div>
+
+                                  {/* Approach / Extent */}
+                                  <div>
+                                    <label className="block text-[10px] font-bold text-indigo-950 dark:text-indigo-200 mb-1">
+                                      Approach / Extent
+                                    </label>
+                                    <select
+                                      value={selectedItem.approach || "Total"}
+                                      onChange={(e) => handleUpdateSurgeryField(selectedItem.id, "approach", e.target.value)}
+                                      className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-700 font-medium"
+                                    >
+                                      <option value="Total">Total Arthroplasty / Full</option>
+                                      <option value="Partial / Hemi">Partial / Hemiarthroplasty</option>
+                                      <option value="Arthroscopic / Minimally Invasive">Arthroscopic / Keyhole</option>
+                                      <option value="Open">Traditional Open</option>
+                                    </select>
+                                  </div>
+                                </div>
+                              )}
+
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-indigo-950 dark:text-indigo-200 mb-0.5">
+                                    Surgery Year / Date
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={selectedItem.surgeryDate || ""}
+                                    onChange={(e) => handleUpdateSurgeryField(selectedItem.id, "surgeryDate", e.target.value)}
+                                    placeholder="e.g. 2022"
+                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-700"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-indigo-950 dark:text-indigo-200 mb-0.5">
+                                    Surgeon / Hospital
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={selectedItem.hospital || ""}
+                                    onChange={(e) => handleUpdateSurgeryField(selectedItem.id, "hospital", e.target.value)}
+                                    placeholder="e.g. Mass General / Dr. Sterling"
+                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-700"
+                                  />
+                                </div>
+                              </div>
+
+                              {isSided && (
+                                <div>
+                                  <label className="block text-[10px] font-bold text-indigo-950 dark:text-indigo-200 mb-0.5">
+                                    Implants / Hardware Notes
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={selectedItem.hardwareNotes || ""}
+                                    onChange={(e) => handleUpdateSurgeryField(selectedItem.id, "hardwareNotes", e.target.value)}
+                                    placeholder="e.g. Ceramic head, cross-linked polyethylene, cemented stem"
+                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-indigo-300 dark:border-indigo-700"
+                                  />
+                                </div>
+                              )}
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
                 </div>
               )}
 
-              {/* STEP 4: MEDICATIONS */}
+              {/* -------------------------------------------------------------
+                  STEP 4: MEDICATIONS (DECOUPLED DRUGS & PROGRESSIVE DOSING)
+              ------------------------------------------------------------- */}
               {wizardStep === 4 && (
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Step 4: Do you take daily or routine medications?
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      Select common prescriptions or add custom medications.
-                    </p>
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Pill className="w-4 h-4 text-amber-600" />
+                        <span>Step 4: Prescription & Routine Medications</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Choose medications from the clean alphabetical list. Configure dosage, frequency, and linked diagnosis.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingCustomMed(!isAddingCustomMed)}
+                      className="flex items-center gap-1.5 bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-2xs transition-all shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{isAddingCustomMed ? "Close Custom Drug" : "Add Other Medication"}</span>
+                    </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-56 overflow-y-auto pr-1">
-                    {(CLINICAL_CATALOG.medications || []).slice(0, 8).map((med) => {
-                      const isSelected = selectedMeds.some((m) => m.name === med.name);
-                      return (
-                        <button
-                          key={med.id}
-                          type="button"
-                          onClick={() => {
-                            if (isSelected) {
-                              setSelectedMeds((prev) => prev.filter((m) => m.name !== med.name));
-                            } else {
-                              setSelectedMeds((prev) => [
-                                ...prev,
-                                {
-                                  id: med.id,
-                                  name: med.name,
-                                  dosage: med.dosage,
-                                  route: med.route,
-                                  frequency: med.frequency,
-                                  indication: med.indication,
-                                  startDate: new Date().toISOString().split("T")[0],
-                                  system: med.system
-                                }
-                              ]);
-                            }
-                          }}
-                          className={`p-2.5 rounded-lg border text-left transition-all flex items-start justify-between gap-2 ${
-                            isSelected
-                              ? "bg-amber-50 border-amber-600 text-amber-900 dark:bg-amber-950/40 dark:border-amber-500 dark:text-amber-200 shadow-2xs font-medium"
-                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-700 dark:text-slate-300"
-                          }`}
-                        >
-                          <div className="min-w-0">
-                            <div className="text-xs font-bold">{med.name} ({med.dosage})</div>
-                            <div className="text-[10px] text-slate-500">{med.frequency} • {med.indication}</div>
+
+                  {/* Custom Medication addition input */}
+                  {isAddingCustomMed && (
+                    <div className="p-3 bg-amber-50/60 dark:bg-amber-950/20 border border-amber-300 dark:border-amber-700/60 rounded-xl flex items-center gap-2">
+                      <input
+                        type="text"
+                        value={customMedName}
+                        onChange={(e) => setCustomMedName(e.target.value)}
+                        placeholder="Enter medication generic or brand name (e.g. Clonazepam, Synthroid)..."
+                        className="flex-1 px-3 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-amber-300 dark:border-amber-700"
+                      />
+                      <button
+                        type="button"
+                        onClick={handleAddCustomMedication}
+                        disabled={!customMedName.trim()}
+                        className="bg-amber-700 hover:bg-amber-800 text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow-sm disabled:opacity-40"
+                      >
+                        Add to List
+                      </button>
+                    </div>
+                  )}
+
+                  {/* Active Selected Medications with Progressive Disclosure Form */}
+                  {selectedMeds.length > 0 && (
+                    <div className="space-y-2.5 bg-amber-50/30 dark:bg-amber-950/10 p-4 rounded-2xl border border-amber-200 dark:border-amber-900/60">
+                      <h4 className="text-xs font-bold uppercase tracking-wider text-amber-900 dark:text-amber-200 flex items-center justify-between">
+                        <span>Configured Prescriptions ({selectedMeds.length})</span>
+                        <span className="text-[10px] font-normal text-slate-500">Fine-tune exact doses and frequencies</span>
+                      </h4>
+
+                      <div className="space-y-3">
+                        {selectedMeds.map((med) => (
+                          <div
+                            key={med.id}
+                            className="p-3 bg-white dark:bg-slate-900 rounded-xl border border-amber-200/80 dark:border-amber-800/60 shadow-2xs space-y-2.5"
+                          >
+                            <div className="flex items-center justify-between">
+                              <span className="text-xs font-bold text-slate-900 dark:text-white flex items-center gap-1.5">
+                                <Pill className="w-3.5 h-3.5 text-amber-600" />
+                                <span>{med.name}</span>
+                              </span>
+                              <button
+                                type="button"
+                                onClick={() => setSelectedMeds((prev) => prev.filter((m) => m.id !== med.id))}
+                                className="text-slate-400 hover:text-rose-600 p-1"
+                                title="Remove medication"
+                              >
+                                <Trash2 className="w-3.5 h-3.5" />
+                              </button>
+                            </div>
+
+                            {/* Dosing, Frequency, Start Date & Linked Condition Grid */}
+                            <div className="grid grid-cols-1 sm:grid-cols-4 gap-2.5">
+                              {/* Exact Dose (Numeric + Unit) */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                  Dose & Unit
+                                </label>
+                                <div className="flex gap-1">
+                                  <input
+                                    type="text"
+                                    value={med.doseNumber || ""}
+                                    onChange={(e) => handleUpdateMedicationField(med.id, "doseNumber", e.target.value)}
+                                    placeholder="e.g. 20"
+                                    className="w-16 px-2 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-center font-bold"
+                                  />
+                                  <select
+                                    value={med.doseUnit || "mg"}
+                                    onChange={(e) => handleUpdateMedicationField(med.id, "doseUnit", e.target.value)}
+                                    className="flex-1 px-1.5 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
+                                  >
+                                    <option value="mg">mg</option>
+                                    <option value="mcg">mcg</option>
+                                    <option value="g">g</option>
+                                    <option value="mL">mL</option>
+                                    <option value="units">units</option>
+                                    <option value="puffs">puffs</option>
+                                    <option value="drops">drops</option>
+                                    <option value="tablets">tablets</option>
+                                    <option value="patches">patches</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              {/* Frequency */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                  Frequency
+                                </label>
+                                <select
+                                  value={med.frequency}
+                                  onChange={(e) => handleUpdateMedicationField(med.id, "frequency", e.target.value)}
+                                  className="w-full px-2 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
+                                >
+                                  <option value="Once daily (QD)">Once daily (QD)</option>
+                                  <option value="Twice daily (BID)">Twice daily (BID)</option>
+                                  <option value="Three times daily (TID)">Three times daily (TID)</option>
+                                  <option value="Four times daily (QID)">Four times daily (QID)</option>
+                                  <option value="Every morning (QAM)">Every morning (QAM)</option>
+                                  <option value="Every evening (QPM / QHS)">Every evening (QPM / QHS)</option>
+                                  <option value="Every other day">Every other day</option>
+                                  <option value="Weekly">Weekly</option>
+                                  <option value="As needed (PRN)">As needed (PRN)</option>
+                                </select>
+                              </div>
+
+                              {/* Date Started */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                  Year / Date Started
+                                </label>
+                                <input
+                                  type="text"
+                                  value={med.startDate || ""}
+                                  onChange={(e) => handleUpdateMedicationField(med.id, "startDate", e.target.value)}
+                                  placeholder="e.g. 2021"
+                                  className="w-full px-2 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700 text-center"
+                                />
+                              </div>
+
+                              {/* Linked Diagnosis / Reason */}
+                              <div>
+                                <label className="block text-[10px] font-bold text-slate-600 dark:text-slate-400 mb-0.5">
+                                  Health Reason (Linked Diagnosis)
+                                </label>
+                                <select
+                                  value={med.indication}
+                                  onChange={(e) => handleUpdateMedicationField(med.id, "indication", e.target.value)}
+                                  className="w-full px-2 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
+                                >
+                                  {selectedConditions.map((c) => (
+                                    <option key={c.name} value={c.name}>
+                                      {c.plainName || c.name}
+                                    </option>
+                                  ))}
+                                  <option value="General Health Maintenance">General Health Maintenance</option>
+                                  <option value="Pain Management">Pain Management</option>
+                                  <option value="Infection Treatment">Infection Treatment</option>
+                                  <option value="Other">Other / Custom Reason...</option>
+                                </select>
+                              </div>
+                            </div>
+
+                            {med.indication === "Other" && (
+                              <input
+                                type="text"
+                                value={med.customIndication || ""}
+                                onChange={(e) => handleUpdateMedicationField(med.id, "customIndication", e.target.value)}
+                                placeholder="Specify exact clinical indication or symptoms..."
+                                className="w-full px-2.5 py-1 text-xs border rounded bg-slate-50 dark:bg-slate-800 border-slate-300 dark:border-slate-700"
+                              />
+                            )}
                           </div>
-                          <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${isSelected ? "bg-amber-600 border-amber-600 text-white" : "border-slate-300"}`}>
-                            {isSelected && <CheckCircle2 className="w-3 h-3" />}
-                          </div>
-                        </button>
-                      );
-                    })}
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Alphabetical Selection Grid */}
+                  <div>
+                    <div className="relative mb-3">
+                      <Search className="w-4 h-4 absolute left-3 top-2.5 text-slate-400" />
+                      <input
+                        type="text"
+                        value={medSearch}
+                        onChange={(e) => setMedSearch(e.target.value)}
+                        placeholder="Search alphabetical catalog of common medications..."
+                        className="w-full pl-9 pr-4 py-2 text-xs border rounded-xl bg-slate-50 dark:bg-slate-800/80 border-slate-200 dark:border-slate-700 focus:outline-hidden focus:ring-2 focus:ring-amber-500"
+                      />
+                    </div>
+
+                    <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 max-h-52 overflow-y-auto pr-1">
+                      {filteredMedications.map((drug) => {
+                        const isSelected = selectedMeds.some((m) => m.name.toLowerCase() === drug.toLowerCase());
+                        return (
+                          <button
+                            key={drug}
+                            type="button"
+                            onClick={() => toggleMedicationItem(drug)}
+                            className={`p-2.5 rounded-lg border text-left text-xs transition-all flex items-center justify-between gap-1.5 ${
+                              isSelected
+                                ? "bg-amber-100/80 border-amber-600 text-amber-950 font-bold dark:bg-amber-950 dark:text-amber-200 shadow-2xs"
+                                : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 text-slate-700 dark:text-slate-300 hover:border-amber-300"
+                            }`}
+                          >
+                            <span className="truncate">{drug}</span>
+                            <span
+                              className={`w-3.5 h-3.5 rounded-full border flex items-center justify-center shrink-0 text-[9px] ${
+                                isSelected ? "bg-amber-600 border-amber-600 text-white" : "border-slate-300"
+                              }`}
+                            >
+                              {isSelected ? "✓" : "+"}
+                            </span>
+                          </button>
+                        );
+                      })}
+                    </div>
                   </div>
                 </div>
               )}
 
-              {/* STEP 5: PROCEDURES */}
+              {/* -------------------------------------------------------------
+                  STEP 5: PROCEDURES & DIAGNOSTIC STUDIES
+              ------------------------------------------------------------- */}
               {wizardStep === 5 && (
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Step 5: Diagnostic Procedures & Screenings
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      Track recall intervals for colonoscopies, echocardiograms, and imaging scans.
-                    </p>
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <FileSearch className="w-4 h-4 text-sky-600" />
+                        <span>Step 5: Diagnostic Procedures & Screenings</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Track colonoscopies, mammograms, echocardiograms, and imaging studies with surveillance recall intervals.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingCustomProc(!isAddingCustomProc)}
+                      className="flex items-center gap-1.5 bg-sky-700 hover:bg-sky-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-2xs transition-all shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{isAddingCustomProc ? "Close Custom Form" : "Add Custom Procedure"}</span>
+                    </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
-                    {(CLINICAL_CATALOG.procedures || []).map((proc) => {
-                      const isSelected = selectedProcedures.some((p) => p.procedure_name === proc.name);
-                      return (
+
+                  {/* Custom Procedure Form */}
+                  {isAddingCustomProc && (
+                    <div className="p-4 rounded-2xl bg-sky-50/50 dark:bg-sky-950/20 border-2 border-sky-500/40 space-y-3">
+                      <h4 className="text-xs font-bold text-sky-950 dark:text-sky-200">
+                        Add Custom Diagnostic Procedure
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Procedure Name <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={customProc.name}
+                            onChange={(e) => setCustomProc((p) => ({ ...p, name: e.target.value }))}
+                            placeholder="e.g. Cardiac MRI"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Date Performed
+                          </label>
+                          <input
+                            type="date"
+                            value={customProc.datePerformed}
+                            onChange={(e) => setCustomProc((p) => ({ ...p, datePerformed: e.target.value }))}
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Repeat Recall Interval (Years)
+                          </label>
+                          <select
+                            value={customProc.recallYears}
+                            onChange={(e) => setCustomProc((p) => ({ ...p, recallYears: e.target.value }))}
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          >
+                            <option value="1">1 Year (Annual)</option>
+                            <option value="2">2 Years</option>
+                            <option value="3">3 Years</option>
+                            <option value="5">5 Years</option>
+                            <option value="10">10 Years</option>
+                          </select>
+                        </div>
+                      </div>
+
+                      <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Physician & Facility
+                          </label>
+                          <input
+                            type="text"
+                            value={customProc.facility}
+                            onChange={(e) => setCustomProc((p) => ({ ...p, facility: e.target.value }))}
+                            placeholder="e.g. Dr. Patel / Metro Endoscopy Center"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Findings / Results Summary
+                          </label>
+                          <input
+                            type="text"
+                            value={customProc.findings}
+                            onChange={(e) => setCustomProc((p) => ({ ...p, findings: e.target.value }))}
+                            placeholder="e.g. Unremarkable study without focal abnormalities."
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex justify-end pt-1">
                         <button
-                          key={proc.id}
                           type="button"
-                          onClick={() => toggleProcedure(proc)}
-                          className={`p-2.5 rounded-lg border text-left transition-all flex items-start justify-between gap-2 ${
+                          onClick={handleSaveCustomProcedure}
+                          disabled={!customProc.name.trim()}
+                          className="bg-sky-700 hover:bg-sky-800 disabled:opacity-40 text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow-sm"
+                        >
+                          Save Procedure
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Procedures Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto pr-1">
+                    {COMMON_PROCEDURES.map((proc) => {
+                      const selectedItem = selectedProcedures.find((p) => p.procedure_name === proc.name);
+                      const isSelected = !!selectedItem;
+
+                      return (
+                        <div
+                          key={proc.name}
+                          className={`p-3.5 rounded-xl border transition-all ${
                             isSelected
-                              ? "bg-sky-50 border-sky-600 text-sky-900 dark:bg-sky-950/40 dark:border-sky-500 dark:text-sky-200 shadow-2xs font-medium"
-                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-700 dark:text-slate-300"
+                              ? "bg-sky-50/80 border-sky-600 dark:bg-sky-950/40 dark:border-sky-500 shadow-2xs"
+                              : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-slate-300"
                           }`}
                         >
-                          <div className="min-w-0">
-                            <div className="text-xs font-bold">{proc.plainName || proc.name}</div>
-                            <div className="text-[10px] text-slate-500">{proc.anatomical_marker} • Repeat: {proc.defaultRecallYears} yr(s)</div>
+                          <div
+                            onClick={() => toggleProcedurePreset(proc)}
+                            className="flex items-start justify-between gap-2 cursor-pointer"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                                {proc.plainName}
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                <span className="font-semibold">{proc.name}</span> • {proc.marker}
+                              </div>
+                            </div>
+                            <div
+                              className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${
+                                isSelected ? "bg-sky-600 border-sky-600 text-white" : "border-slate-300 bg-white dark:bg-slate-900"
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                            </div>
                           </div>
-                          <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${isSelected ? "bg-sky-600 border-sky-600 text-white" : "border-slate-300"}`}>
-                            {isSelected && <CheckCircle2 className="w-3 h-3" />}
-                          </div>
-                        </button>
+
+                          {/* Structured Fields when selected */}
+                          {isSelected && (
+                            <div className="mt-3 pt-3 border-t border-sky-200/60 dark:border-sky-800/60 space-y-2.5">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-sky-950 dark:text-sky-200 mb-0.5">
+                                    Date Performed
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={selectedItem.date_performed || ""}
+                                    onChange={(e) => handleUpdateProcedureField(selectedItem.id, "date_performed", e.target.value)}
+                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-700"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-sky-950 dark:text-sky-200 mb-0.5">
+                                    Recall Interval
+                                  </label>
+                                  <select
+                                    value={selectedItem.recall_interval_years || 1}
+                                    onChange={(e) => handleUpdateProcedureField(selectedItem.id, "recall_interval_years", e.target.value)}
+                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-700"
+                                  >
+                                    <option value="1">1 Year (Annual)</option>
+                                    <option value="2">2 Years</option>
+                                    <option value="3">3 Years</option>
+                                    <option value="5">5 Years</option>
+                                    <option value="10">10 Years</option>
+                                  </select>
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-sky-950 dark:text-sky-200 mb-0.5">
+                                  Performing Physician / Facility
+                                </label>
+                                <input
+                                  type="text"
+                                  value={selectedItem.institution || ""}
+                                  onChange={(e) => handleUpdateProcedureField(selectedItem.id, "institution", e.target.value)}
+                                  placeholder="e.g. Endoscopy Center / Dr. Patel"
+                                  className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-700"
+                                />
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-sky-950 dark:text-sky-200 mb-0.5">
+                                  Findings / Results Summary
+                                </label>
+                                <textarea
+                                  rows={2}
+                                  value={selectedItem.findings || ""}
+                                  onChange={(e) => handleUpdateProcedureField(selectedItem.id, "findings", e.target.value)}
+                                  placeholder="Document key biopsy or imaging results..."
+                                  className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-sky-300 dark:border-sky-700 resize-none"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
                 </div>
               )}
 
-              {/* STEP 6: VACCINES */}
+              {/* -------------------------------------------------------------
+                  STEP 6: VACCINATIONS & IMMUNIZATIONS (WITH LOT NUMBERS)
+              ------------------------------------------------------------- */}
               {wizardStep === 6 && (
-                <div className="space-y-3">
-                  <div>
-                    <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                      Step 6: Vaccines & Immunization History
-                    </h4>
-                    <p className="text-xs text-slate-500">
-                      Select vaccines you have received to check your CDC immunization status.
-                    </p>
+                <div className="space-y-5 animate-in fade-in duration-150">
+                  <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 border-b border-slate-100 dark:border-slate-800 pb-3">
+                    <div>
+                      <h3 className="text-base font-bold text-slate-900 dark:text-white flex items-center gap-2">
+                        <Syringe className="w-4 h-4 text-emerald-600" />
+                        <span>Step 6: Vaccines & Immunization History</span>
+                      </h3>
+                      <p className="text-xs text-slate-500 mt-0.5">
+                        Document vaccinations received to monitor CDC preventive health status. Enter administering clinic and lot numbers.
+                      </p>
+                    </div>
+
+                    <button
+                      type="button"
+                      onClick={() => setIsAddingCustomVax(!isAddingCustomVax)}
+                      className="flex items-center gap-1.5 bg-emerald-700 hover:bg-emerald-800 text-white text-xs font-bold px-3 py-1.5 rounded-lg shadow-2xs transition-all shrink-0"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>{isAddingCustomVax ? "Close Custom Vaccine" : "Add Custom Vaccine"}</span>
+                    </button>
                   </div>
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 max-h-64 overflow-y-auto pr-1">
-                    {(CLINICAL_CATALOG.vaccines || []).map((vax) => {
-                      const isSelected = selectedVaccines.some((v) => v.vaccine_name === vax.name);
-                      return (
+
+                  {/* Custom Vaccine Form */}
+                  {isAddingCustomVax && (
+                    <div className="p-4 rounded-2xl bg-emerald-50/50 dark:bg-emerald-950/20 border-2 border-emerald-500/40 space-y-3">
+                      <h4 className="text-xs font-bold text-emerald-950 dark:text-emerald-200">
+                        Add Custom Immunization
+                      </h4>
+                      <div className="grid grid-cols-1 md:grid-cols-4 gap-3">
+                        <div className="md:col-span-2">
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Vaccine Name <span className="text-rose-500">*</span>
+                          </label>
+                          <input
+                            type="text"
+                            value={customVax.name}
+                            onChange={(e) => setCustomVax((v) => ({ ...v, name: e.target.value }))}
+                            placeholder="e.g. RSV Vaccine (Abrysvo)"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Date Administered
+                          </label>
+                          <input
+                            type="date"
+                            value={customVax.dateAdministered}
+                            onChange={(e) => setCustomVax((v) => ({ ...v, dateAdministered: e.target.value }))}
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                        <div>
+                          <label className="block text-[11px] font-bold text-slate-700 dark:text-slate-300 mb-1">
+                            Lot Number (Optional)
+                          </label>
+                          <input
+                            type="text"
+                            value={customVax.lotNumber}
+                            onChange={(e) => setCustomVax((v) => ({ ...v, lotNumber: e.target.value }))}
+                            placeholder="e.g. FL-92841"
+                            className="w-full px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                          />
+                        </div>
+                      </div>
+
+                      <div className="flex items-center justify-between pt-1">
+                        <input
+                          type="text"
+                          value={customVax.clinic}
+                          onChange={(e) => setCustomVax((v) => ({ ...v, clinic: e.target.value }))}
+                          placeholder="Administering clinic or pharmacy (e.g. Walgreens #0482)..."
+                          className="flex-1 mr-3 px-2.5 py-1.5 text-xs border rounded-lg bg-white dark:bg-slate-900 border-slate-300 dark:border-slate-700"
+                        />
                         <button
-                          key={vax.id}
                           type="button"
-                          onClick={() => toggleVaccine(vax)}
-                          className={`p-2.5 rounded-lg border text-left transition-all flex items-start justify-between gap-2 ${
+                          onClick={handleSaveCustomVaccine}
+                          disabled={!customVax.name.trim()}
+                          className="bg-emerald-700 hover:bg-emerald-800 disabled:opacity-40 text-white text-xs font-bold px-4 py-1.5 rounded-lg shadow-sm"
+                        >
+                          Save Vaccine
+                        </button>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* Vaccines Grid */}
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[360px] overflow-y-auto pr-1">
+                    {COMMON_VACCINES.map((vax) => {
+                      const selectedItem = selectedVaccines.find((v) => v.vaccine_name === vax.name);
+                      const isSelected = !!selectedItem;
+
+                      return (
+                        <div
+                          key={vax.name}
+                          className={`p-3.5 rounded-xl border transition-all ${
                             isSelected
-                              ? "bg-emerald-50 border-emerald-600 text-emerald-900 dark:bg-emerald-950/40 dark:border-emerald-500 dark:text-emerald-200 shadow-2xs font-medium"
-                              : "bg-white dark:bg-slate-800 border-slate-200 dark:border-slate-700 hover:bg-slate-50 text-slate-700 dark:text-slate-300"
+                              ? "bg-emerald-50/80 border-emerald-600 dark:bg-emerald-950/40 dark:border-emerald-500 shadow-2xs"
+                              : "bg-white dark:bg-slate-800/60 border-slate-200 dark:border-slate-700 hover:border-slate-300"
                           }`}
                         >
-                          <div className="min-w-0">
-                            <div className="text-xs font-bold">{vax.plainName}</div>
-                            <div className="text-[10px] text-slate-500">{vax.name} • {vax.category}</div>
+                          <div
+                            onClick={() => toggleVaccinePreset(vax)}
+                            className="flex items-start justify-between gap-2 cursor-pointer"
+                          >
+                            <div className="flex-1 min-w-0">
+                              <div className="text-xs font-bold text-slate-900 dark:text-white leading-snug">
+                                {vax.plainName}
+                              </div>
+                              <div className="text-[11px] text-slate-500 dark:text-slate-400 mt-0.5">
+                                <span className="font-semibold">{vax.name}</span> • {vax.category}
+                              </div>
+                            </div>
+                            <div
+                              className={`w-5 h-5 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${
+                                isSelected ? "bg-emerald-600 border-emerald-600 text-white" : "border-slate-300 bg-white dark:bg-slate-900"
+                              }`}
+                            >
+                              {isSelected && <Check className="w-3.5 h-3.5 stroke-[3]" />}
+                            </div>
                           </div>
-                          <div className={`w-4 h-4 rounded-md border flex items-center justify-center shrink-0 mt-0.5 ${isSelected ? "bg-emerald-600 border-emerald-600 text-white" : "border-slate-300"}`}>
-                            {isSelected && <CheckCircle2 className="w-3 h-3" />}
-                          </div>
-                        </button>
+
+                          {/* Vaccination details when selected */}
+                          {isSelected && (
+                            <div className="mt-3 pt-3 border-t border-emerald-200/60 dark:border-emerald-800/60 space-y-2">
+                              <div className="grid grid-cols-2 gap-2">
+                                <div>
+                                  <label className="block text-[10px] font-bold text-emerald-950 dark:text-emerald-200 mb-0.5">
+                                    Date Administered
+                                  </label>
+                                  <input
+                                    type="date"
+                                    value={selectedItem.date_administered || ""}
+                                    onChange={(e) => handleUpdateVaccineField(selectedItem.id, "date_administered", e.target.value)}
+                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-700"
+                                  />
+                                </div>
+                                <div>
+                                  <label className="block text-[10px] font-bold text-emerald-950 dark:text-emerald-200 mb-0.5">
+                                    Lot Number (Optional)
+                                  </label>
+                                  <input
+                                    type="text"
+                                    value={selectedItem.lot_number || ""}
+                                    onChange={(e) => handleUpdateVaccineField(selectedItem.id, "lot_number", e.target.value)}
+                                    placeholder="e.g. 094A23B"
+                                    className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-700 font-mono"
+                                  />
+                                </div>
+                              </div>
+
+                              <div>
+                                <label className="block text-[10px] font-bold text-emerald-950 dark:text-emerald-200 mb-0.5">
+                                  Administering Location / Clinic
+                                </label>
+                                <input
+                                  type="text"
+                                  value={selectedItem.administering_facility || ""}
+                                  onChange={(e) => handleUpdateVaccineField(selectedItem.id, "administering_facility", e.target.value)}
+                                  placeholder="e.g. CVS Pharmacy #04821 / Mass General Clinic"
+                                  className="w-full px-2 py-1 text-[11px] border rounded bg-white dark:bg-slate-900 border-emerald-300 dark:border-emerald-700"
+                                />
+                              </div>
+                            </div>
+                          )}
+                        </div>
                       );
                     })}
                   </div>
@@ -753,19 +2331,19 @@ export function PatientOnboardingModal({
 
           {/* VIEW 3: PDF UPLOAD SCREEN */}
           {viewMode === "pdf_upload" && (
-            <div className="space-y-4">
+            <div className="space-y-6 max-w-2xl mx-auto my-auto py-4">
               <div
                 onClick={() => fileInputRef.current?.click()}
-                className="border-2 border-dashed border-indigo-300 dark:border-indigo-700/60 hover:border-indigo-500 bg-indigo-50/20 hover:bg-indigo-50/40 dark:bg-slate-800/40 rounded-2xl p-8 text-center cursor-pointer transition-all"
+                className="border-2 border-dashed border-indigo-300 dark:border-indigo-700/60 hover:border-indigo-500 bg-indigo-50/20 hover:bg-indigo-50/50 dark:bg-slate-800/40 rounded-3xl p-10 text-center cursor-pointer transition-all shadow-xs"
               >
-                <div className="w-12 h-12 rounded-full bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 flex items-center justify-center mx-auto mb-3">
-                  <Upload className="w-6 h-6" />
+                <div className="w-14 h-14 rounded-2xl bg-indigo-100 dark:bg-indigo-900/50 text-indigo-700 dark:text-indigo-300 flex items-center justify-center mx-auto mb-4">
+                  <Upload className="w-7 h-7" />
                 </div>
-                <h4 className="text-sm font-bold text-slate-800 dark:text-slate-100">
-                  {isParsingPdf ? "Parsing Document Locally..." : "Upload Clinical Summary or Discharge PDF"}
+                <h4 className="text-base font-bold text-slate-900 dark:text-white">
+                  {isParsingPdf ? "Parsing Document Locally in Memory..." : "Upload Clinical Summary or Discharge PDF"}
                 </h4>
-                <p className="text-xs text-slate-500 mt-1 max-w-sm mx-auto">
-                  Drag and drop your PDF here, or click to browse files on your computer.
+                <p className="text-xs text-slate-500 mt-2 max-w-md mx-auto leading-relaxed">
+                  Drag and drop your PDF medical record here, or click to browse files on your device.
                 </p>
                 <input
                   ref={fileInputRef}
@@ -777,25 +2355,25 @@ export function PatientOnboardingModal({
               </div>
 
               {pdfParseError && (
-                <div className="p-3 bg-red-50 text-red-700 text-xs rounded-lg border border-red-200 flex items-center gap-2">
+                <div className="p-3 bg-red-50 text-red-700 text-xs rounded-xl border border-red-200 flex items-center gap-2">
                   <AlertCircle className="w-4 h-4 shrink-0" />
                   <span>{pdfParseError}</span>
                 </div>
               )}
 
-              <div className="p-3 bg-slate-50 dark:bg-slate-800/50 rounded-xl border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 space-y-1">
-                <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-1.5">
-                  <Shield className="w-3.5 h-3.5 text-teal-600" />
-                  <span>How client-side extraction works:</span>
+              <div className="p-4 bg-slate-50 dark:bg-slate-800/50 rounded-2xl border border-slate-200 dark:border-slate-800 text-xs text-slate-600 dark:text-slate-400 space-y-1.5">
+                <div className="font-bold text-slate-800 dark:text-slate-200 flex items-center gap-2">
+                  <ShieldCheck className="w-4 h-4 text-teal-600" />
+                  <span>How Private Client-Side Parsing Works:</span>
                 </div>
                 <p>
-                  1. The document is rendered entirely within your browser memory using PDF.js.
+                  1. The file is interpreted directly by <strong>Mozilla PDF.js</strong> running entirely in your browser sandbox.
                 </p>
                 <p>
-                  2. Regular expressions recognize medical terms, surgeries, dosage instructions, and test dates.
+                  2. Regular expressions extract medical diagnoses, surgeries, prescription dosing, and diagnostic studies.
                 </p>
                 <p>
-                  3. You will have full opportunity to review, uncheck, or edit all items before saving.
+                  3. You will be able to review, edit, or remove any item on the verification card before saving.
                 </p>
               </div>
             </div>
@@ -803,117 +2381,157 @@ export function PatientOnboardingModal({
 
           {/* VIEW 4: PDF REVIEW & VERIFICATION CHECKLIST */}
           {viewMode === "pdf_review" && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100 dark:border-slate-800">
+            <div className="space-y-5 animate-in fade-in duration-150">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-200 dark:border-slate-800">
                 <div>
-                  <h4 className="text-sm font-bold text-slate-900 dark:text-white">
-                    Verification Checklist from "{pdfFileName}"
-                  </h4>
-                  <p className="text-xs text-slate-500">
-                    Review extracted findings. Uncheck any item that does not apply.
+                  <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                    Verification Checklist: Extracted from "{pdfFileName}"
+                  </h3>
+                  <p className="text-xs text-slate-500 mt-0.5">
+                    Review extracted findings. Items will be calibrated onto your 3D avatar upon confirmation.
                   </p>
                 </div>
                 <button
                   type="button"
                   onClick={() => setViewMode("pdf_upload")}
-                  className="text-xs font-semibold text-indigo-700 dark:text-indigo-400 hover:underline"
+                  className="text-xs font-bold text-indigo-700 dark:text-indigo-400 hover:underline"
                 >
                   Upload Another File
                 </button>
               </div>
 
-              {/* Extracted Conditions */}
-              <div>
-                <div className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
-                  <Activity className="w-3.5 h-3.5 text-teal-600" />
-                  <span>Detected Conditions ({extractedData.conditions.length})</span>
-                </div>
-                {extractedData.conditions.length === 0 ? (
-                  <div className="text-xs text-slate-400 italic">No specific medical conditions identified</div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {extractedData.conditions.map((c, i) => (
-                      <div key={i} className="p-2 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
-                        <div>
-                          <span className="font-bold text-slate-800 dark:text-slate-100">{c.plainName || c.name}</span>
-                          <span className="text-slate-500 ml-2">({c.name})</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setExtractedData(prev => ({ ...prev, conditions: prev.conditions.filter((_, idx) => idx !== i) }))}
-                          className="text-slate-400 hover:text-red-600 p-1"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+              {/* Four-Column Extracted Cards Review Grid */}
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-4">
+                {/* Conditions */}
+                <div className="p-4 rounded-2xl bg-teal-50/40 border border-teal-200 dark:bg-slate-800 dark:border-teal-900/60 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-teal-900 dark:text-teal-200">
+                    <span className="flex items-center gap-1.5">
+                      <Activity className="w-4 h-4 text-teal-600" />
+                      <span>Conditions ({extractedData.conditions.length})</span>
+                    </span>
                   </div>
-                )}
-              </div>
+                  {extractedData.conditions.length === 0 ? (
+                    <div className="text-xs text-slate-400 italic py-2">No conditions detected</div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                      {extractedData.conditions.map((c, i) => (
+                        <div key={i} className="p-2 bg-white dark:bg-slate-900 rounded-lg border text-xs flex items-center justify-between">
+                          <span className="font-bold truncate">{c.plainName || c.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setExtractedData((prev) => ({ ...prev, conditions: prev.conditions.filter((_, idx) => idx !== i) }))}
+                            className="text-slate-400 hover:text-rose-600 p-0.5"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-              {/* Extracted Surgeries */}
-              <div>
-                <div className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
-                  <Heart className="w-3.5 h-3.5 text-indigo-600" />
-                  <span>Detected Surgeries ({extractedData.surgeries.length})</span>
-                </div>
-                {extractedData.surgeries.length === 0 ? (
-                  <div className="text-xs text-slate-400 italic">No surgical procedures identified</div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {extractedData.surgeries.map((s, i) => (
-                      <div key={i} className="p-2 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
-                        <div>
-                          <span className="font-bold text-slate-800 dark:text-slate-100">{s.plainName || s.name}</span>
-                          <span className="text-slate-500 ml-2">({s.site})</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setExtractedData(prev => ({ ...prev, surgeries: prev.surgeries.filter((_, idx) => idx !== i) }))}
-                          className="text-slate-400 hover:text-red-600 p-1"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                {/* Surgeries */}
+                <div className="p-4 rounded-2xl bg-indigo-50/40 border border-indigo-200 dark:bg-slate-800 dark:border-indigo-900/60 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-indigo-900 dark:text-indigo-200">
+                    <span className="flex items-center gap-1.5">
+                      <Heart className="w-4 h-4 text-indigo-600" />
+                      <span>Surgeries ({extractedData.surgeries.length})</span>
+                    </span>
                   </div>
-                )}
-              </div>
+                  {extractedData.surgeries.length === 0 ? (
+                    <div className="text-xs text-slate-400 italic py-2">No surgeries detected</div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                      {extractedData.surgeries.map((s, i) => (
+                        <div key={i} className="p-2 bg-white dark:bg-slate-900 rounded-lg border text-xs flex items-center justify-between">
+                          <span className="font-bold truncate">{s.plainName || s.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setExtractedData((prev) => ({ ...prev, surgeries: prev.surgeries.filter((_, idx) => idx !== i) }))}
+                            className="text-slate-400 hover:text-rose-600 p-0.5"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
 
-              {/* Extracted Medications */}
-              <div>
-                <div className="text-xs font-bold text-slate-800 dark:text-slate-200 mb-1 flex items-center gap-1.5">
-                  <Pill className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Detected Medications ({extractedData.medications.length})</span>
-                </div>
-                {extractedData.medications.length === 0 ? (
-                  <div className="text-xs text-slate-400 italic">No medications identified</div>
-                ) : (
-                  <div className="space-y-1.5">
-                    {extractedData.medications.map((m, i) => (
-                      <div key={i} className="p-2 rounded bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 flex items-center justify-between text-xs">
-                        <div>
-                          <span className="font-bold text-slate-800 dark:text-slate-100">{m.name} {m.dosage}</span>
-                          <span className="text-slate-500 ml-2">• {m.frequency}</span>
-                        </div>
-                        <button
-                          type="button"
-                          onClick={() => setExtractedData(prev => ({ ...prev, medications: prev.medications.filter((_, idx) => idx !== i) }))}
-                          className="text-slate-400 hover:text-red-600 p-1"
-                        >
-                          <Trash2 className="w-3.5 h-3.5" />
-                        </button>
-                      </div>
-                    ))}
+                {/* Medications */}
+                <div className="p-4 rounded-2xl bg-amber-50/40 border border-amber-200 dark:bg-slate-800 dark:border-amber-900/60 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-amber-900 dark:text-amber-200">
+                    <span className="flex items-center gap-1.5">
+                      <Pill className="w-4 h-4 text-amber-600" />
+                      <span>Medications ({extractedData.medications.length})</span>
+                    </span>
                   </div>
-                )}
+                  {extractedData.medications.length === 0 ? (
+                    <div className="text-xs text-slate-400 italic py-2">No medications detected</div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                      {extractedData.medications.map((m, i) => (
+                        <div key={i} className="p-2 bg-white dark:bg-slate-900 rounded-lg border text-xs flex items-center justify-between">
+                          <span className="font-bold truncate">{m.name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setExtractedData((prev) => ({ ...prev, medications: prev.medications.filter((_, idx) => idx !== i) }))}
+                            className="text-slate-400 hover:text-rose-600 p-0.5"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
+
+                {/* Procedures & Vaccines */}
+                <div className="p-4 rounded-2xl bg-sky-50/40 border border-sky-200 dark:bg-slate-800 dark:border-sky-900/60 space-y-2.5">
+                  <div className="flex items-center justify-between text-xs font-bold text-sky-900 dark:text-sky-200">
+                    <span className="flex items-center gap-1.5">
+                      <FileSearch className="w-4 h-4 text-sky-600" />
+                      <span>Tests & Vaccines ({extractedData.procedures.length + extractedData.vaccines.length})</span>
+                    </span>
+                  </div>
+                  {extractedData.procedures.length === 0 && extractedData.vaccines.length === 0 ? (
+                    <div className="text-xs text-slate-400 italic py-2">No studies detected</div>
+                  ) : (
+                    <div className="space-y-1.5 max-h-60 overflow-y-auto pr-1">
+                      {extractedData.procedures.map((p, i) => (
+                        <div key={`p-${i}`} className="p-2 bg-white dark:bg-slate-900 rounded-lg border text-xs flex items-center justify-between">
+                          <span className="font-bold truncate">{p.plainName || p.procedure_name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setExtractedData((prev) => ({ ...prev, procedures: prev.procedures.filter((_, idx) => idx !== i) }))}
+                            className="text-slate-400 hover:text-rose-600 p-0.5"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                      {extractedData.vaccines.map((v, i) => (
+                        <div key={`v-${i}`} className="p-2 bg-white dark:bg-slate-900 rounded-lg border text-xs flex items-center justify-between">
+                          <span className="font-bold truncate">{v.plainName || v.vaccine_name}</span>
+                          <button
+                            type="button"
+                            onClick={() => setExtractedData((prev) => ({ ...prev, vaccines: prev.vaccines.filter((_, idx) => idx !== i) }))}
+                            className="text-slate-400 hover:text-rose-600 p-0.5"
+                          >
+                            <Trash2 className="w-3.5 h-3.5" />
+                          </button>
+                        </div>
+                      ))}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
           )}
         </div>
 
         {/* Modal Footer */}
-        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/80 dark:bg-slate-900/80">
+        <div className="flex items-center justify-between px-6 py-4 border-t border-slate-200 dark:border-slate-800 bg-slate-50/90 dark:bg-slate-900/90 shrink-0">
           {viewMode === "choice" ? (
             <div className="flex items-center justify-between w-full">
               <button
@@ -921,7 +2539,7 @@ export function PatientOnboardingModal({
                 onClick={onClose}
                 className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               >
-                Skip / Explore Demo Avatar
+                Skip / Explore Demo Patient
               </button>
             </div>
           ) : viewMode === "wizard" ? (
@@ -935,41 +2553,45 @@ export function PatientOnboardingModal({
                     setViewMode("choice");
                   }
                 }}
-                className="flex items-center gap-1 text-xs font-semibold text-slate-600 hover:text-slate-900 dark:text-slate-400"
+                className="flex items-center gap-1.5 text-xs font-bold text-slate-600 hover:text-slate-900 dark:text-slate-300 px-3 py-2 rounded-lg hover:bg-slate-200/60"
               >
-                <ArrowLeft className="w-3.5 h-3.5" />
-                <span>Back</span>
+                <ArrowLeft className="w-4 h-4" />
+                <span>{wizardStep === 1 ? "Back to Choices" : "Previous Step"}</span>
               </button>
 
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-3">
+                <span className="text-xs text-slate-500 hidden sm:inline">
+                  Step {wizardStep} of 6
+                </span>
+
                 {wizardStep < 6 ? (
                   <button
                     type="button"
                     onClick={() => setWizardStep((s) => s + 1)}
-                    className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-sm transition-all"
+                    className="flex items-center gap-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold px-5 py-2 rounded-xl shadow-md transition-all hover:translate-x-0.5"
                   >
-                    <span>Next Step</span>
-                    <ArrowRight className="w-3.5 h-3.5" />
+                    <span>Next: {wizardStep === 1 ? "Conditions" : wizardStep === 2 ? "Surgeries" : wizardStep === 3 ? "Medications" : wizardStep === 4 ? "Procedures" : "Vaccines"}</span>
+                    <ArrowRight className="w-4 h-4" />
                   </button>
                 ) : (
                   <button
                     type="button"
                     onClick={handleFinishWizard}
-                    className="flex items-center gap-1.5 bg-teal-600 hover:bg-teal-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition-all"
+                    className="flex items-center gap-1.5 bg-teal-700 hover:bg-teal-800 text-white text-xs font-bold px-6 py-2 rounded-xl shadow-lg transition-all hover:scale-102"
                   >
                     <CheckCircle2 className="w-4 h-4" />
-                    <span>Complete & Populate Avatar</span>
+                    <span>Complete Intake & Populate Avatar</span>
                   </button>
                 )}
               </div>
             </div>
           ) : (
-            /* viewMode === "pdf_upload" or "pdf_review" */
+            /* PDF Mode Footer */
             <div className="flex items-center justify-between w-full">
               <button
                 type="button"
                 onClick={() => setViewMode("choice")}
-                className="text-xs font-semibold text-slate-600 dark:text-slate-400 hover:underline"
+                className="text-xs font-bold text-slate-600 dark:text-slate-400 hover:underline"
               >
                 Cancel
               </button>
@@ -978,7 +2600,7 @@ export function PatientOnboardingModal({
                 <button
                   type="button"
                   onClick={handleFinishPdfImport}
-                  className="flex items-center gap-1.5 bg-indigo-600 hover:bg-indigo-700 text-white text-xs font-bold px-4 py-2 rounded-lg shadow-md transition-all"
+                  className="flex items-center gap-2 bg-indigo-700 hover:bg-indigo-800 text-white text-xs font-bold px-6 py-2 rounded-xl shadow-lg transition-all hover:scale-102"
                 >
                   <CheckCircle2 className="w-4 h-4" />
                   <span>Confirm & Save to Health Avatar</span>

@@ -201,6 +201,7 @@ create table if not exists public.patient_vaccinations (
   date_administered date,
   dose_number int default 1,
   administering_facility text,
+  lot_number text,
   next_due_date date,
   created_at timestamp with time zone default timezone('utc'::text, now()) not null
 );

@@ -597,6 +597,7 @@ export function usePatientData() {
       date_administered: vaccine.date_administered || vaccine.dateAdministered || new Date().toISOString().split("T")[0],
       dose_number: Number(vaccine.dose_number || vaccine.doseNumber || 1),
       administering_facility: vaccine.administering_facility || vaccine.administeringFacility || "",
+      lot_number: vaccine.lot_number || vaccine.lotNumber || null,
       next_due_date: vaccine.next_due_date || vaccine.nextDueDate || null
     };
     setPatientData(prev => {
@@ -609,6 +610,7 @@ export function usePatientData() {
           date_administered: newVax.date_administered,
           dose_number: newVax.dose_number,
           administering_facility: newVax.administering_facility,
+          lot_number: newVax.lot_number,
           next_due_date: newVax.next_due_date
         }).catch(console.error);
       }
@@ -629,6 +631,9 @@ export function usePatientData() {
         if (updates.dateAdministered) dbUpdates.date_administered = updates.dateAdministered;
         if (updates.doseNumber !== undefined) dbUpdates.dose_number = Number(updates.doseNumber);
         if (updates.administeringFacility) dbUpdates.administering_facility = updates.administeringFacility;
+        if (updates.lotNumber !== undefined || updates.lot_number !== undefined) {
+          dbUpdates.lot_number = updates.lotNumber || updates.lot_number || null;
+        }
         if (updates.nextDueDate !== undefined) dbUpdates.next_due_date = updates.nextDueDate;
 
         supabase.from("patient_vaccinations").update(dbUpdates).eq("id", id).eq("user_id", user.id).catch(console.error);
@@ -652,9 +657,21 @@ export function usePatientData() {
 
   // Batch commit onboarding data (from Intake Wizard or PDF Import)
   const batchCommitOnboardingData = useCallback(async (payload) => {
+    const newAllergiesList = payload.allergiesList !== undefined
+      ? payload.allergiesList
+      : (patientData.allergiesList || []);
+
+    let allergiesSummary = payload.profile?.allergies || patientData.profile.allergies;
+    if (newAllergiesList.length > 0) {
+      allergiesSummary = newAllergiesList.map(a => `${a.medication || a.drugName}${a.reaction ? ` (${a.reaction})` : ""}`).join(", ");
+    } else if (payload.isNkda || (!allergiesSummary && newAllergiesList.length === 0)) {
+      allergiesSummary = "No Known Drug Allergies (NKDA)";
+    }
+
     const updatedProfile = {
       ...patientData.profile,
-      ...(payload.profile || {})
+      ...(payload.profile || {}),
+      allergies: allergiesSummary
     };
 
     const newConditions = payload.conditions !== undefined ? payload.conditions : patientData.conditions;
@@ -666,6 +683,7 @@ export function usePatientData() {
     const updated = {
       ...patientData,
       profile: updatedProfile,
+      allergiesList: newAllergiesList,
       conditions: newConditions,
       surgeries: newSurgeries,
       medications: newMedications,
@@ -712,19 +730,37 @@ export function usePatientData() {
         }
 
         if (newSurgeries.length > 0) {
-          const rows = newSurgeries.map(s => ({
-            id: s.id || `surg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
-            user_id: user.id,
-            name: s.name,
-            site: s.site || "General",
-            surgery_date: s.surgeryDate || s.surgery_date || null,
-            hospital: s.hospital || null,
-            surgeon: s.surgeon || null,
-            incision: s.incision || null,
-            coords: s.coords || { x: 0, y: 3.0, z: 1.0 },
-            system: s.system || "general",
-            notes: s.notes || null
-          }));
+          const rows = newSurgeries.map(s => {
+            let coords = s.coords || { x: 0, y: 3.0, z: 1.0 };
+            if (s.laterality === "Right" && coords.x > 0) {
+              coords = { ...coords, x: -Math.abs(coords.x) };
+            } else if (s.laterality === "Left" && coords.x < 0) {
+              coords = { ...coords, x: Math.abs(coords.x) };
+            }
+
+            let notes = s.notes || "";
+            const extras = [];
+            if (s.laterality) extras.push(`Laterality: ${s.laterality}`);
+            if (s.approach) extras.push(`Approach: ${s.approach}`);
+            if (s.hardwareNotes) extras.push(`Hardware: ${s.hardwareNotes}`);
+            if (extras.length > 0) {
+              notes = notes ? `${notes} • ${extras.join(" | ")}` : extras.join(" | ");
+            }
+
+            return {
+              id: s.id || `surg-${Date.now()}-${Math.random().toString(36).substr(2, 5)}`,
+              user_id: user.id,
+              name: s.name,
+              site: s.site || "General",
+              surgery_date: s.surgeryDate || s.surgery_date || null,
+              hospital: s.hospital || null,
+              surgeon: s.surgeon || null,
+              incision: s.incision || null,
+              coords,
+              system: s.system || "general",
+              notes: notes || null
+            };
+          });
           await supabase.from("patient_surgeries").upsert(rows);
         }
 
@@ -769,6 +805,7 @@ export function usePatientData() {
             date_administered: v.date_administered || v.dateAdministered || null,
             dose_number: v.dose_number ? Number(v.dose_number) : 1,
             administering_facility: v.administering_facility || v.administeringFacility || null,
+            lot_number: v.lot_number || v.lotNumber || null,
             next_due_date: v.next_due_date || v.nextDueDate || null
           }));
           await supabase.from("patient_vaccinations").upsert(rows);
