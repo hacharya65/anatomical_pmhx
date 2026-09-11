@@ -48,7 +48,8 @@ export default function App() {
     updateVaccination,
     deleteVaccination,
     batchCommitOnboardingData,
-    resetToDefault
+    resetToDefault,
+    loadDemoData
   } = usePatientData();
 
   // Navigation & 3D interaction state
@@ -60,17 +61,26 @@ export default function App() {
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isOnboardingOpen, setIsOnboardingOpen] = useState(false);
 
-  // Auto-launch onboarding modal if authenticated user is newly registered with zero records
-  useEffect(() => {
-    if (isNewPatient) {
-      setIsOnboardingOpen(true);
-    }
-  }, [isNewPatient]);
-
   // Demo mode state: allows bypassing login to view Elena Vance immediately
   const [isDemoMode, setIsDemoMode] = useState(() => {
     return localStorage.getItem("pmhx_demo_mode") === "true";
   });
+
+  // Auto-launch onboarding modal ONLY if authenticated user is newly registered with zero records (never in demo mode)
+  useEffect(() => {
+    if (isNewPatient && user && !isDemoMode) {
+      setIsOnboardingOpen(true);
+    }
+  }, [isNewPatient, user, isDemoMode]);
+
+  // Ensure full demo patient hydration if demo mode is active without an authenticated user
+  useEffect(() => {
+    if (isDemoMode && !user) {
+      if (!patientData?.profile?.name || (patientData?.conditions?.length === 0 && patientData?.medications?.length === 0)) {
+        loadDemoData();
+      }
+    }
+  }, [isDemoMode, user, patientData, loadDemoData]);
 
   const handleSignOut = async () => {
     localStorage.removeItem("pmhx_demo_mode");
@@ -407,7 +417,7 @@ export default function App() {
     return (
       <LoginView
         onDemoAccess={() => {
-          localStorage.setItem("pmhx_demo_mode", "true");
+          loadDemoData();
           setIsDemoMode(true);
         }}
         onLoginSuccess={() => {
@@ -524,6 +534,10 @@ export default function App() {
         onClose={() => {
           setIsOnboardingOpen(false);
           setIsNewPatient(false);
+        }}
+        onExploreDemo={() => {
+          loadDemoData();
+          setIsOnboardingOpen(false);
         }}
         initialProfile={patientData.profile}
         onBatchCommit={batchCommitOnboardingData}

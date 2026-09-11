@@ -1106,6 +1106,17 @@ export function usePatientData() {
     setIsNewPatient(false);
   }, [user]);
 
+  // Explicitly load the complete Elena Vance interactive clinical demo
+  const loadDemoData = useCallback(() => {
+    const defaultData = JSON.parse(JSON.stringify(DEFAULT_PATIENT_RECORD));
+    setPatientData(defaultData);
+    setIsNewPatient(false);
+    try {
+      localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(defaultData));
+      localStorage.setItem("pmhx_demo_mode", "true");
+    } catch (_) {}
+  }, []);
+
   return {
     patientData,
     user,
@@ -1139,6 +1150,7 @@ export function usePatientData() {
     updateVaccination,
     deleteVaccination,
     batchCommitOnboardingData,
-    resetToDefault
+    resetToDefault,
+    loadDemoData
   };
 }

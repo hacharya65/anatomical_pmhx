@@ -258,7 +258,8 @@ export function PatientOnboardingModal({
   isOpen,
   onClose,
   initialProfile = {},
-  onBatchCommit
+  onBatchCommit,
+  onExploreDemo
 }) {
   // View state: "choice" | "wizard" | "pdf_upload" | "pdf_review"
   const [viewMode, setViewMode] = useState("choice");
@@ -4039,7 +4040,12 @@ export function PatientOnboardingModal({
             <div className="flex items-center justify-between w-full">
               <button
                 type="button"
-                onClick={onClose}
+                onClick={() => {
+                  if (onExploreDemo) {
+                    onExploreDemo();
+                  }
+                  onClose();
+                }}
                 className="text-xs font-semibold text-slate-500 hover:text-slate-800 dark:hover:text-slate-200"
               >
                 Skip / Explore Demo Patient
