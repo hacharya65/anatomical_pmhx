@@ -2799,7 +2799,7 @@ export function PatientOnboardingModal({
                                 const isSelected = selectedMeds.some((m) => m.name.toLowerCase() === item.name.toLowerCase());
                                 return (
                                   <button
-                                    key={item.rxcui}
+                                    key={item.rxcui ? `${item.rxcui}-${item.name}` : item.name}
                                     type="button"
                                     onClick={() => toggleMedicationItem(item.name, item.rxcui)}
                                     className={`w-full p-2 rounded-lg border text-left text-xs transition-all flex items-center justify-between gap-1.5 ${
@@ -2809,9 +2809,9 @@ export function PatientOnboardingModal({
                                     }`}
                                   >
                                     <div className="min-w-0 flex-1">
-                                      <div className="font-bold truncate text-[11px]">{item.name}</div>
+                                      <div className="font-bold truncate text-[11px]">{item.displayName || item.name}</div>
                                       <div className="text-[10px] opacity-75 font-mono">
-                                        RxCUI: {item.rxcui} {item.synonym && `• ${item.synonym}`}
+                                        RxCUI: {item.rxcui || "Pending"} {item.synonym && item.synonym !== (item.displayName || item.name) && `• ${item.synonym}`}
                                       </div>
                                     </div>
                                     <span className="text-xs font-bold shrink-0">{isSelected ? "✓" : "+"}</span>

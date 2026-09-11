@@ -266,8 +266,10 @@ export function AddEditItemModal({
                 rxResults.map((r) => ({
                   id: `rx-${r.rxcui || r.name}`,
                   name: r.name,
+                  displayName: r.displayName || r.name,
                   rxcui: r.rxcui,
                   synonym: r.synonym,
+                  strengths: r.strengths,
                   isRxNorm: true
                 }))
               );
@@ -378,6 +380,13 @@ export function AddEditItemModal({
     setShowSuggestions(false);
 
     if (type === "medication") {
+      if (catItem.strengths && catItem.strengths.length > 0) {
+        setAvailableStrengths(catItem.strengths);
+        if (!formData.dosage || formData.dosage === "10 mg") {
+          setFormData((prev) => ({ ...prev, dosage: catItem.strengths[0] }));
+        }
+      }
+
       getMedicationStrengths(catItem.rxcui, catItem.name)
         .then((strengthInfo) => {
           if (strengthInfo?.strengths?.length > 0) {
@@ -524,10 +533,10 @@ export function AddEditItemModal({
                     className="w-full text-left p-2.5 hover:bg-teal-50/60 transition-all text-xs text-slate-900 flex items-center justify-between"
                   >
                     <div>
-                      <div className="font-semibold text-slate-900">{sug.name}</div>
+                      <div className="font-semibold text-slate-900">{sug.displayName || sug.name}</div>
                       <div className="text-[10px] text-slate-500">
                         {sug.rxcui
-                          ? `RxCUI: ${sug.rxcui}${sug.synonym ? ` • ${sug.synonym}` : ""}`
+                          ? `RxCUI: ${sug.rxcui}${sug.synonym && sug.synonym !== (sug.displayName || sug.name) ? ` • ${sug.synonym}` : ""}`
                           : sug.icd10
                           ? `ICD-10-CM: ${sug.icd10}`
                           : sug.region || sug.site || sug.indication}
