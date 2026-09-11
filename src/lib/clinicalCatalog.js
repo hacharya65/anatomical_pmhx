@@ -1306,6 +1306,7 @@ export const DEFAULT_PATIENT_RECORD = {
   vaccinations: [
     {
       id: "vax-rec-1",
+      cvx: "140",
       vaccine_name: "Influenza (Flu Quadrivalent)",
       plainName: "Annual Flu Shot",
       date_administered: "2025-10-12",
@@ -1315,6 +1316,7 @@ export const DEFAULT_PATIENT_RECORD = {
     },
     {
       id: "vax-rec-2",
+      cvx: "311",
       vaccine_name: "COVID-19 Updated Booster (mRNA)",
       plainName: "Updated COVID-19 Booster",
       date_administered: "2025-10-12",
@@ -1324,6 +1326,7 @@ export const DEFAULT_PATIENT_RECORD = {
     },
     {
       id: "vax-rec-3",
+      cvx: "115",
       vaccine_name: "Tdap (Tetanus, Diphtheria, Pertussis)",
       plainName: "Tetanus & Whooping Cough Booster",
       date_administered: "2019-06-15",
@@ -1333,6 +1336,7 @@ export const DEFAULT_PATIENT_RECORD = {
     },
     {
       id: "vax-rec-4",
+      cvx: "187",
       vaccine_name: "Shingrix (Recombinant Zoster)",
       plainName: "Shingles Vaccine (2 Doses)",
       date_administered: "2023-08-20",
@@ -1403,6 +1407,7 @@ export const DEFAULT_PATIENT_RECORD = {
       id: "med-rec-1",
       name: "Lisinopril",
       dosage: "20 mg",
+      rxcui: "29046",
       route: "Oral (PO)",
       frequency: "Once Daily (QD)",
       indication: "Hypertension",
@@ -1419,6 +1424,7 @@ export const DEFAULT_PATIENT_RECORD = {
       id: "med-rec-2",
       name: "Metformin Extended-Release",
       dosage: "1000 mg",
+      rxcui: "861007",
       route: "Oral (PO)",
       frequency: "Twice Daily with Meals (BID)",
       indication: "Type 2 Diabetes",
@@ -1435,6 +1441,7 @@ export const DEFAULT_PATIENT_RECORD = {
       id: "med-rec-3",
       name: "Atorvastatin",
       dosage: "40 mg",
+      rxcui: "259255",
       route: "Oral (PO)",
       frequency: "Once Daily at Bedtime (QHS)",
       indication: "Cardiovascular Risk Reduction",

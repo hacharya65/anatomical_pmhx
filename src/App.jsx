@@ -8,6 +8,7 @@ import { AddEditItemModal } from "./components/modals/AddEditItemModal";
 import { HelpModal } from "./components/modals/HelpModal";
 import { GuidedTour } from "./components/modals/GuidedTour";
 import { PatientOnboardingModal } from "./components/modals/PatientOnboardingModal";
+import { InspectionDrawer } from "./components/modals/InspectionDrawer";
 import { usePatientData } from "./hooks/usePatientData";
 import { isItemRelevantForPerspective } from "./lib/clinicalCatalog";
 import { LoginView } from "./components/auth/LoginView";
@@ -582,6 +583,16 @@ export default function App() {
         onClose={() => setIsTourOpen(false)}
         onComplete={() => setIsTourOpen(false)}
         onPerspectiveChange={setPerspective}
+      />
+
+      {/* 3D Inspection Drawer with NIH MedlinePlus Integration */}
+      <InspectionDrawer
+        focusedItem={focusedItem}
+        onClose={() => setFocusedItem(null)}
+        onEdit={(item) => {
+          const itemCat = item.category || item.itemType || (item.dosage ? "medication" : item.procedure_name ? "procedure" : "condition");
+          handleOpenEdit(item, itemCat);
+        }}
       />
     </div>
   );
