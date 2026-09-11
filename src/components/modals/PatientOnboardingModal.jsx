@@ -35,7 +35,11 @@ import {
   localizeConditionAnatomically,
   localizeSurgeryAnatomically
 } from "../../lib/clinicalCatalog";
-import { extractMedicalRecordFromPdf } from "../../services/geminiParser";
+import {
+  extractMedicalRecordFromPdf,
+  getGeminiApiKey,
+  saveCustomGeminiApiKey
+} from "../../services/geminiParser";
 import { searchConditions } from "../../services/ctss.js";
 import { searchMedications, getMedicationStrengths } from "../../services/rxnorm.js";
 import { getStandardVaccines, evaluateVaccineStatus } from "../../services/cdcSchedule.js";
@@ -392,6 +396,7 @@ export function PatientOnboardingModal({
   const [isParsingPdf, setIsParsingPdf] = useState(false);
   const [pdfFileName, setPdfFileName] = useState("");
   const [pdfParseError, setPdfParseError] = useState("");
+  const [customGeminiKey, setCustomGeminiKey] = useState("");
   const [isDraggingPdf, setIsDraggingPdf] = useState(false);
   const [pdfReviewTab, setPdfReviewTab] = useState("all");
   const [extractedReview, setExtractedReview] = useState({
@@ -4042,28 +4047,65 @@ export function PatientOnboardingModal({
 
               {/* User-facing error alert banner */}
               {pdfParseError && (
-                <div className="p-4 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 text-xs rounded-2xl border border-rose-200 dark:border-rose-900/60 flex items-start justify-between gap-3 shadow-sm animate-in fade-in">
-                  <div className="flex items-start gap-3">
-                    <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
-                    <div>
-                      <p className="font-bold text-sm text-rose-900 dark:text-rose-100">
-                        Unable to extract health record
-                      </p>
-                      <p className="mt-1 text-rose-700 dark:text-rose-300 leading-relaxed">
-                        {pdfParseError}
-                      </p>
+                <div className="p-4 bg-rose-50 dark:bg-rose-950/40 text-rose-800 dark:text-rose-200 text-xs rounded-2xl border border-rose-200 dark:border-rose-900/60 shadow-sm animate-in fade-in space-y-3">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="flex items-start gap-3">
+                      <AlertCircle className="w-5 h-5 text-rose-600 dark:text-rose-400 shrink-0 mt-0.5" />
+                      <div>
+                        <p className="font-bold text-sm text-rose-900 dark:text-rose-100">
+                          Unable to extract health record
+                        </p>
+                        <p className="mt-1 text-rose-700 dark:text-rose-300 leading-relaxed">
+                          {pdfParseError}
+                        </p>
+                      </div>
                     </div>
+                    <button
+                      type="button"
+                      onClick={() => {
+                        setPdfParseError("");
+                        fileInputRef.current?.click();
+                      }}
+                      className="px-3 py-1.5 bg-rose-100 dark:bg-rose-900/60 hover:bg-rose-200 dark:hover:bg-rose-900 text-rose-800 dark:text-rose-200 font-bold rounded-lg text-xs shrink-0 transition-colors cursor-pointer"
+                    >
+                      Try Again
+                    </button>
                   </div>
-                  <button
-                    type="button"
-                    onClick={() => {
-                      setPdfParseError("");
-                      fileInputRef.current?.click();
-                    }}
-                    className="px-3 py-1.5 bg-rose-100 dark:bg-rose-900/60 hover:bg-rose-200 dark:hover:bg-rose-900 text-rose-800 dark:text-rose-200 font-bold rounded-lg text-xs shrink-0 transition-colors"
-                  >
-                    Try Again
-                  </button>
+
+                  {/* Self-service Key Entry for Vercel or missing env */}
+                  {pdfParseError.toLowerCase().includes("missing gemini api key") && (
+                    <div className="pt-2.5 border-t border-rose-200 dark:border-rose-900/50 space-y-2">
+                      <p className="font-semibold text-rose-900 dark:text-rose-200">
+                        Paste your Gemini API Key below (stored securely in your browser's local session):
+                      </p>
+                      <div className="flex items-center gap-2">
+                        <input
+                          type="password"
+                          placeholder="Paste Gemini API Key (AQ...)"
+                          value={customGeminiKey}
+                          onChange={(e) => setCustomGeminiKey(e.target.value)}
+                          className="flex-1 text-xs px-3 py-1.5 rounded-lg border border-rose-300 dark:border-rose-800 bg-white dark:bg-slate-900 text-slate-900 dark:text-white focus:outline-none focus:ring-1 focus:ring-rose-500"
+                        />
+                        <button
+                          type="button"
+                          onClick={() => {
+                            if (customGeminiKey.trim()) {
+                              saveCustomGeminiApiKey(customGeminiKey.trim());
+                              setPdfParseError("");
+                              if (fileInputRef.current?.files?.[0]) {
+                                handleProcessPdfFile(fileInputRef.current.files[0]);
+                              } else {
+                                fileInputRef.current?.click();
+                              }
+                            }
+                          }}
+                          className="px-3.5 py-1.5 bg-indigo-700 hover:bg-indigo-800 text-white font-bold rounded-lg text-xs shrink-0 transition-colors cursor-pointer"
+                        >
+                          Save Key & Extract
+                        </button>
+                      </div>
+                    </div>
+                  )}
                 </div>
               )}
 

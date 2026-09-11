@@ -146,6 +146,38 @@ export function fileToBase64(file) {
 }
 
 /**
+ * Retrieves the Gemini API key from environment variables or localStorage.
+ */
+export function getGeminiApiKey() {
+  let envKey = "";
+  try {
+    envKey = import.meta.env?.VITE_GEMINI_API_KEY || "";
+  } catch (_) {}
+
+  let localKey = "";
+  try {
+    if (typeof localStorage !== "undefined") {
+      localKey = localStorage.getItem("pmhx_gemini_api_key") || "";
+    }
+  } catch (_) {}
+
+  return (envKey || localKey || "").trim();
+}
+
+/**
+ * Saves or clears a custom Gemini API key in localStorage.
+ */
+export function saveCustomGeminiApiKey(key) {
+  if (typeof localStorage !== "undefined") {
+    if (key && key.trim()) {
+      localStorage.setItem("pmhx_gemini_api_key", key.trim());
+    } else {
+      localStorage.removeItem("pmhx_gemini_api_key");
+    }
+  }
+}
+
+/**
  * Automated medical record PDF extraction pipeline using the Google Gen AI SDK.
  * Pinned strictly to gemini-1.5-flash with structured JSON schema output.
  *
@@ -153,10 +185,10 @@ export function fileToBase64(file) {
  * @returns {Promise<Object>} Structured clinical JSON payload adhering to schema
  */
 export async function extractMedicalRecordFromPdf(file) {
-  const apiKey = import.meta.env.VITE_GEMINI_API_KEY;
+  const apiKey = getGeminiApiKey();
   if (!apiKey || apiKey.trim() === "") {
     throw new Error(
-      "Missing Gemini API Key. Please verify VITE_GEMINI_API_KEY is configured in your environment."
+      "Missing Gemini API Key. Please verify VITE_GEMINI_API_KEY is configured in your environment or enter your key below."
     );
   }
 
