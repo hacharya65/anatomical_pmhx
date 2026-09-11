@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from "react";
 import { X, Sparkles, ShieldCheck, Check, Link, Plus, AlertCircle, Pill } from "lucide-react";
-import { CLINICAL_CATALOG } from "../../lib/clinicalCatalog";
+import { CLINICAL_CATALOG, localizeConditionAnatomically } from "../../lib/clinicalCatalog";
 import { searchMedications, getMedicationStrengths } from "../../services/rxnorm.js";
 import { searchConditions } from "../../services/ctss.js";
 
@@ -361,9 +361,21 @@ export function AddEditItemModal({
   };
 
   const handleSelectSuggestion = (catItem) => {
+    let extraConditionProps = {};
+    if (type === "condition") {
+      const localized = localizeConditionAnatomically(catItem.name, catItem.icd10);
+      extraConditionProps = {
+        region: catItem.region || localized.region,
+        system: catItem.system || localized.system,
+        coords: catItem.coords || localized.coords,
+        isPosterior: catItem.isPosterior ?? localized.isPosterior
+      };
+    }
+
     setFormData((prev) => ({
       ...prev,
       ...catItem,
+      ...extraConditionProps,
       name: catItem.name,
       rxcui: catItem.rxcui || prev.rxcui,
       icd10: catItem.icd10 || prev.icd10,
@@ -409,6 +421,30 @@ export function AddEditItemModal({
   const handleSubmit = (e) => {
     e.preventDefault();
     const submission = { ...formData };
+    if (type === "condition") {
+      const localized = localizeConditionAnatomically(submission.name, submission.icd10);
+      submission.region = (submission.region && submission.region !== "General") ? submission.region : localized.region;
+      submission.system = (submission.system && submission.system !== "general") ? submission.system : localized.system;
+      submission.coords = (submission.coords && (submission.coords.x !== 0 || submission.coords.y !== 0)) ? submission.coords : localized.coords;
+      submission.isPosterior = submission.isPosterior ?? localized.isPosterior;
+    }
+    if (type === "medication" && linkMode === "custom" && submission.indication && onAddNewCondition) {
+      const existing = existingConditions.find((c) => c.name.toLowerCase() === submission.indication.toLowerCase());
+      if (!existing) {
+        const localized = localizeConditionAnatomically(submission.indication, submission.icd10);
+        onAddNewCondition({
+          id: `cond-${Date.now()}`,
+          name: submission.indication,
+          icd10: submission.icd10 || "",
+          status: "Active",
+          onsetDate: new Date().toISOString().split("T")[0],
+          region: localized.region,
+          system: localized.system,
+          coords: localized.coords,
+          isPosterior: localized.isPosterior
+        });
+      }
+    }
     if (type === "vaccine") {
       submission.vaccine_name = submission.vaccine_name || submission.name;
     }
@@ -982,14 +1018,17 @@ export function AddEditItemModal({
                             key={s.icd10 || s.name}
                             type="button"
                             onClick={() => {
+                              const localized = localizeConditionAnatomically(s.name, s.icd10);
                               const newCond = {
                                 id: `cond-${Date.now()}`,
                                 name: s.name,
                                 icd10: s.icd10,
                                 status: "Active",
                                 onsetDate: new Date().toISOString().split("T")[0],
-                                region: "General",
-                                system: "general"
+                                region: localized.region,
+                                system: localized.system,
+                                coords: localized.coords,
+                                isPosterior: localized.isPosterior
                               };
                               if (onAddNewCondition) {
                                 onAddNewCondition(newCond);

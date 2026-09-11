@@ -1,6 +1,6 @@
 import { useState, useEffect, useCallback } from "react";
 import { supabase } from "../lib/supabase";
-import { DEFAULT_PATIENT_RECORD } from "../lib/clinicalCatalog";
+import { DEFAULT_PATIENT_RECORD, localizeConditionAnatomically } from "../lib/clinicalCatalog";
 
 const GUEST_STORAGE_KEY = "anatomical_pmhx_guest_demo_v2";
 const getUserStorageKey = (userId) => `anatomical_pmhx_user_${userId}_v2`;
@@ -438,9 +438,16 @@ export function usePatientData() {
 
   // Condition CRUD
   const addCondition = useCallback((condition) => {
+    const localized = localizeConditionAnatomically(condition);
+    const hasExplicitCoords = condition.coords && (condition.coords.x !== 0 || condition.coords.y !== 0);
     const newCond = {
+      ...localized,
       ...condition,
-      id: condition.id || `cond-${Date.now()}`
+      id: condition.id || `cond-${Date.now()}`,
+      coords: hasExplicitCoords ? condition.coords : localized.coords,
+      region: (condition.region && condition.region !== "General") ? condition.region : localized.region,
+      system: (condition.system && condition.system !== "general") ? condition.system : localized.system,
+      isPosterior: condition.isPosterior ?? localized.isPosterior
     };
     setPatientData(prev => {
       const next = { ...prev, conditions: [newCond, ...prev.conditions] };

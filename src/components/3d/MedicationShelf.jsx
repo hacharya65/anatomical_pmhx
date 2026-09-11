@@ -4,37 +4,36 @@ import { useFrame } from "@react-three/fiber";
 import * as THREE from "three";
 import { MarkerPin } from "./MarkerPin";
 
+export const TIER_CAPACITY = 3;
+export const TIER_HEIGHT = 1.7;
+export const SHELF_BASE_X = -5.0;
+export const SHELF_BASE_Y = -6.5;
+export const SHELF_BASE_Z = 0.5;
+
 /**
- * Calculates world coordinates for each medication bottle on the shelf
- * Placed in the bottom-left quadrant near the avatar (X ≈ -5.0, Y ≈ -6.5, Z ≈ 0.5)
- * Scaled 50% larger for prominent clinical viewing
+ * Calculates world coordinates for each medication bottle on the shelf.
+ * Arranged in vertical tiers: maximum of 3 medications per horizontal shelf level.
+ * Additional shelves stack upward vertically as medications increase.
+ * All bottles remain on the front Z-plane (Z = 0.5) for 100% visibility and easy clicking.
  */
 export function getMedicationBottleCoords(index, total) {
-  const shelfX = -5.0;
-  const shelfY = -6.5;
-  const shelfZ = 0.5;
+  const tierIndex = Math.floor(index / TIER_CAPACITY);
+  const colIndex = index % TIER_CAPACITY;
 
-  if (total <= 4) {
-    const spacing = Math.min(1.02, 3.6 / Math.max(1, total - 1));
-    const startX = shelfX - ((total - 1) * spacing) / 2;
-    return {
-      x: Number((startX + index * spacing).toFixed(3)),
-      y: Number((shelfY + 0.56).toFixed(3)),
-      z: shelfZ
-    };
-  } else {
-    // 2-row tiered arrangement (scaled 1.5x)
-    const isFront = index % 2 === 0;
-    const col = Math.floor(index / 2);
-    const cols = Math.ceil(total / 2);
-    const spacing = Math.min(1.02, 3.6 / Math.max(1, cols - 1));
-    const startX = shelfX - ((cols - 1) * spacing) / 2;
-    return {
-      x: Number((startX + col * spacing).toFixed(3)),
-      y: Number((shelfY + 0.56 + (isFront ? 0 : 0.32)).toFixed(3)),
-      z: Number((shelfZ + (isFront ? 0.48 : -0.48)).toFixed(3))
-    };
-  }
+  // Number of bottles on this specific tier
+  const remainingMeds = total - tierIndex * TIER_CAPACITY;
+  const countOnThisTier = Math.min(TIER_CAPACITY, Math.max(1, remainingMeds));
+
+  const bottleSpacing = 1.35;
+  const startX = SHELF_BASE_X - ((countOnThisTier - 1) * bottleSpacing) / 2;
+  const bottleX = startX + colIndex * bottleSpacing;
+  const bottleY = SHELF_BASE_Y + tierIndex * TIER_HEIGHT + 0.56;
+
+  return {
+    x: Number(bottleX.toFixed(3)),
+    y: Number(bottleY.toFixed(3)),
+    z: SHELF_BASE_Z
+  };
 }
 
 /**
@@ -245,9 +244,10 @@ export function MedicationShelf({
   const count = medications.length;
   if (count === 0) return null;
 
-  const isTiered = count > 4;
-  const shelfCenter = { x: -5.0, y: -6.5, z: 0.5 };
-  const shelfWidth = 5.1; // 50% wider (from 3.4 to 5.1)
+  const numTiers = Math.max(1, Math.ceil(count / TIER_CAPACITY));
+  const shelfCenter = { x: SHELF_BASE_X, y: SHELF_BASE_Y, z: SHELF_BASE_Z };
+  const shelfWidth = 4.8;
+  const shelfDepth = 1.1;
 
   // Pre-calculate world coords for each medication
   const medsWithCoords = useMemo(() => {
@@ -257,11 +257,15 @@ export function MedicationShelf({
     }));
   }, [medications, count]);
 
+  // Support pillar geometry calculated dynamically from total tiers
+  const totalPillarHeight = (numTiers - 1) * TIER_HEIGHT + 1.25;
+  const pillarCenterY = ((numTiers - 1) * TIER_HEIGHT) / 2 - 0.05;
+
   return (
     <group position={[0, 0, 0]}>
       {/* 3D Tour Anchor Element covering the Pharmacy Shelf & Prescription Bottles */}
       <Html
-        position={[shelfCenter.x, shelfCenter.y + 0.55, shelfCenter.z]}
+        position={[shelfCenter.x, shelfCenter.y + ((numTiers - 1) * TIER_HEIGHT) / 2 + 0.55, shelfCenter.z]}
         center
         distanceFactor={28}
         zIndexRange={[0, 0]}
@@ -272,66 +276,55 @@ export function MedicationShelf({
           className="rounded-2xl pointer-events-none"
           style={{
             width: "340px",
-            height: "150px"
+            height: `${140 + (numTiers - 1) * 70}px`
           }}
         />
       </Html>
 
       {/* ======================================================== */}
-      {/* 1. PHYSICAL SHELF STRUCTURE (Frosted Glass / Porcelain)  */}
+      {/* 1. PHYSICAL SHELF STRUCTURE (Multi-Tier Frosted Glass)   */}
       {/* ======================================================== */}
       <group position={[shelfCenter.x, shelfCenter.y, shelfCenter.z]}>
-        {isTiered ? (
-          <>
-            {/* Lower Front Shelf Tier (50% larger) */}
-            <mesh position={[0, 0.08, 0.48]} receiveShadow>
-              <boxGeometry args={[shelfWidth, 0.12, 0.93]} />
-              <meshStandardMaterial
-                color="#ffffff"
-                roughness={0.15}
-                metalness={0.1}
-              />
-            </mesh>
-            {/* Upper Rear Shelf Tier (50% larger) */}
-            <mesh position={[0, 0.40, -0.48]} receiveShadow>
-              <boxGeometry args={[shelfWidth, 0.12, 0.93]} />
-              <meshStandardMaterial
-                color="#f8fafc"
-                roughness={0.15}
-                metalness={0.1}
-              />
-            </mesh>
-            {/* Step riser (50% larger) */}
-            <mesh position={[0, 0.24, 0]}>
-              <boxGeometry args={[shelfWidth, 0.24, 0.06]} />
-              <meshStandardMaterial color="#e2e8f0" roughness={0.3} metalness={0.2} />
-            </mesh>
-          </>
-        ) : (
-          /* Single Tier Shelf (50% larger) */
-          <mesh position={[0, 0.08, 0]} receiveShadow>
-            <boxGeometry args={[shelfWidth, 0.12, 1.2]} />
-            <meshStandardMaterial
-              color="#ffffff"
-              roughness={0.15}
-              metalness={0.1}
-            />
-          </mesh>
-        )}
+        {Array.from({ length: numTiers }).map((_, tierIdx) => {
+          const tierY = tierIdx * TIER_HEIGHT;
+          return (
+            <group key={`shelf-tier-${tierIdx}`} position={[0, tierY, 0]}>
+              {/* White Frosted Glass / Porcelain Shelf Slab */}
+              <mesh position={[0, 0.08, 0]} receiveShadow>
+                <boxGeometry args={[shelfWidth, 0.12, shelfDepth]} />
+                <meshStandardMaterial
+                  color="#ffffff"
+                  roughness={0.15}
+                  metalness={0.1}
+                />
+              </mesh>
+              {/* Teal Clinical Accent Edge Trim */}
+              <mesh position={[0, 0.13, 0.54]}>
+                <boxGeometry args={[shelfWidth + 0.02, 0.025, 0.025]} />
+                <meshStandardMaterial color="#0f766e" metalness={0.4} roughness={0.3} />
+              </mesh>
+            </group>
+          );
+        })}
 
-        {/* Polished Stainless Steel Mounting Brackets / Shelf Legs (50% larger) */}
-        <mesh position={[-2.1, -0.52, 0]}>
-          <cylinderGeometry args={[0.05, 0.05, 1.1, 16]} />
+        {/* Polished Stainless Steel Vertical Support Pillars */}
+        <mesh position={[-2.1, pillarCenterY, 0]}>
+          <cylinderGeometry args={[0.045, 0.045, totalPillarHeight, 16]} />
           <meshStandardMaterial color="#94a3b8" metalness={0.85} roughness={0.2} />
         </mesh>
-        <mesh position={[2.1, -0.52, 0]}>
-          <cylinderGeometry args={[0.05, 0.05, 1.1, 16]} />
+        <mesh position={[2.1, pillarCenterY, 0]}>
+          <cylinderGeometry args={[0.045, 0.045, totalPillarHeight, 16]} />
           <meshStandardMaterial color="#94a3b8" metalness={0.85} roughness={0.2} />
         </mesh>
-        {/* Support crossbar (50% larger) */}
-        <mesh position={[0, -1.02, 0]} rotation={[0, 0, Math.PI / 2]}>
-          <cylinderGeometry args={[0.038, 0.038, 4.2, 16]} />
-          <meshStandardMaterial color="#cbd5e1" metalness={0.8} roughness={0.2} />
+
+        {/* Base Floor Mount Brackets */}
+        <mesh position={[-2.1, -0.58, 0]}>
+          <cylinderGeometry args={[0.1, 0.14, 0.1, 16]} />
+          <meshStandardMaterial color="#64748b" metalness={0.8} roughness={0.3} />
+        </mesh>
+        <mesh position={[2.1, -0.58, 0]}>
+          <cylinderGeometry args={[0.1, 0.14, 0.1, 16]} />
+          <meshStandardMaterial color="#64748b" metalness={0.8} roughness={0.3} />
         </mesh>
       </group>
 

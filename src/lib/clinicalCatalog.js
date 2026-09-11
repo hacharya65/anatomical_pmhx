@@ -67,9 +67,247 @@ export function isItemRelevantForPerspective(item, perspective = "anterior") {
   return perspective === "anterior";
 }
 
+/**
+ * Intelligent Clinical Anatomical Localization Engine
+ * Analyzes diagnosis title, ICD-10 code, plain name, and organ system keywords
+ * to dynamically map new clinical conditions to their authentic 3D anatomical landmarks.
+ * Eliminates generic pelvic/groin clustering at (0, 0, 0).
+ *
+ * @param {string|Object} conditionOrName - Condition name, ICD-10 label, or full condition object
+ * @param {string} [icd10Code] - Optional ICD-10 code
+ * @returns {{ coords: { x: number, y: number, z: number }, region: string, system: string, isPosterior: boolean }}
+ */
+export function localizeConditionAnatomically(conditionOrName, icd10Code = "") {
+  let name = "";
+  let icd10 = (icd10Code || "").trim().toUpperCase();
+  let existingCoords = null;
+
+  if (typeof conditionOrName === "string") {
+    name = conditionOrName;
+  } else if (conditionOrName && typeof conditionOrName === "object") {
+    name = conditionOrName.name || conditionOrName.plainName || conditionOrName.title || "";
+    icd10 = (conditionOrName.icd10 || conditionOrName.code || icd10).trim().toUpperCase();
+    if (conditionOrName.coords && (conditionOrName.coords.x !== 0 || conditionOrName.coords.y !== 0)) {
+      existingCoords = conditionOrName.coords;
+    }
+  }
+
+  const q = name.toLowerCase();
+  const code = icd10.split(".")[0]; // e.g. "I73", "I10", "E11"
+
+  // 1. Lower Extremity Arteries & Peripheral Vasculature (PAD, PVD, Claudication, Arteriosclerosis, DVT)
+  if (
+    code === "I70" || code === "I73" || code === "I74" || code === "I82" ||
+    q.includes("peripheral arterial") || q.includes("peripheral artery") ||
+    q.includes("pad") || q.includes("pvd") || q.includes("claudication") ||
+    q.includes("atherosclerosis of native arteries") || q.includes("poor circulation in leg") ||
+    q.includes("deep vein thrombosis") || q.includes("dvt") || q.includes("arterial disease")
+  ) {
+    const isLeft = q.includes("left");
+    return {
+      coords: existingCoords || { x: isLeft ? 0.95 : -0.95, y: -4.8, z: 0.82 },
+      region: "Lower Extremity Arteries / Peripheral Vasculature",
+      system: "vascular",
+      isPosterior: false
+    };
+  }
+
+  // 2. Cardiac & Coronary (HTN, CAD, CHF, AFib, MI, Angina, Heart Failure)
+  if (
+    code === "I10" || code === "I11" || code === "I12" || code === "I13" ||
+    code === "I20" || code === "I21" || code === "I25" || code === "I48" || code === "I50" ||
+    q.includes("hypertension") || q.includes("high blood pressure") || q.includes("htn") ||
+    q.includes("coronary") || q.includes("cad") || q.includes("heart failure") || q.includes("chf") ||
+    q.includes("atrial fibrillation") || q.includes("afib") || q.includes("myocardial") || q.includes("angina") ||
+    q.includes("cardiac") || q.includes("heart") || q.includes("arrhythmia")
+  ) {
+    return {
+      coords: existingCoords || { x: 0.35, y: 4.25, z: 1.1 },
+      region: "Heart / Thoracic Vasculature",
+      system: "cardiac",
+      isPosterior: false
+    };
+  }
+
+  // 3. Pulmonary / Respiratory (Asthma, COPD, Sleep Apnea, Bronchitis)
+  if (
+    code.startsWith("J") || q.includes("asthma") || q.includes("copd") || q.includes("bronchitis") ||
+    q.includes("emphysema") || q.includes("pneumonia") || q.includes("pulmonary") || q.includes("respiratory") ||
+    q.includes("sleep apnea") || q.includes("osa")
+  ) {
+    if (q.includes("sleep apnea") || q.includes("osa") || code === "G47") {
+      return {
+        coords: existingCoords || { x: 0.0, y: 6.1, z: 0.8 },
+        region: "Upper Airway / Pharynx",
+        system: "respiratory",
+        isPosterior: false
+      };
+    }
+    return {
+      coords: existingCoords || { x: -0.55, y: 4.5, z: 0.95 },
+      region: "Bilateral Pulmonary Bronchial Tree",
+      system: "respiratory",
+      isPosterior: false
+    };
+  }
+
+  // 4. Renal / Kidneys / Flank (CKD, Nephropathy, Renal Failure, Stones)
+  if (
+    code === "N18" || code === "N17" || code === "N19" || code === "N20" ||
+    q.includes("chronic kidney") || q.includes("ckd") || q.includes("renal") || q.includes("kidney") || q.includes("nephropathy")
+  ) {
+    return {
+      coords: existingCoords || { x: 0.72, y: 2.25, z: -0.85 },
+      region: "Bilateral Renal Cortex (Posterior Flank)",
+      system: "renal",
+      isPosterior: true
+    };
+  }
+
+  // 5. Gastrointestinal (GERD, Acid Reflux, Liver, Gallbladder, Stomach, Colon)
+  if (
+    code.startsWith("K") || q.includes("gerd") || q.includes("reflux") || q.includes("liver") ||
+    q.includes("colon") || q.includes("gastric") || q.includes("gallbladder") || q.includes("cholecyst") ||
+    q.includes("bowel") || q.includes("crohn") || q.includes("colitis")
+  ) {
+    if (q.includes("liver") || q.includes("gallbladder") || q.includes("hepatic") || q.includes("cholecyst") || code === "K70" || code === "K76" || code === "K80") {
+      return {
+        coords: existingCoords || { x: -0.7, y: 2.9, z: 0.95 },
+        region: "Right Upper Quadrant / Liver & Gallbladder",
+        system: "digestive",
+        isPosterior: false
+      };
+    }
+    if (q.includes("colon") || q.includes("bowel") || q.includes("crohn") || q.includes("diverticul") || q.includes("colitis") || code.startsWith("K5")) {
+      return {
+        coords: existingCoords || { x: 0.05, y: 1.5, z: 0.95 },
+        region: "Lower Abdomen / Colonic Tract",
+        system: "digestive",
+        isPosterior: false
+      };
+    }
+    return {
+      coords: existingCoords || { x: 0.2, y: 3.2, z: 0.95 },
+      region: "Stomach / Esophagus (Epigastric)",
+      system: "digestive",
+      isPosterior: false
+    };
+  }
+
+  // 6. Endocrine / Metabolic (Diabetes, Thyroid, Hyperlipidemia)
+  if (code.startsWith("E") || q.includes("diabetes") || q.includes("t2d") || q.includes("thyroid") || q.includes("cholesterol")) {
+    if (q.includes("thyroid") || code === "E03" || code === "E06") {
+      return {
+        coords: existingCoords || { x: 0.0, y: 5.8, z: 0.85 },
+        region: "Anterior Cervical Neck / Thyroid",
+        system: "endocrine",
+        isPosterior: false
+      };
+    }
+    if (q.includes("cholesterol") || q.includes("hyperlipidemia") || code === "E78") {
+      return {
+        coords: existingCoords || { x: 0.35, y: 3.9, z: 1.0 },
+        region: "Thoracic Vasculature / Metabolic",
+        system: "cardiovascular",
+        isPosterior: false
+      };
+    }
+    return {
+      coords: existingCoords || { x: 0.1, y: 2.7, z: 1.0 },
+      region: "Pancreas / Epigastric Abdomen",
+      system: "endocrine",
+      isPosterior: false
+    };
+  }
+
+  // 7. Cranial & Neurologic (Stroke, CVA, Migraine, Dementia, Neuropathy)
+  if (
+    code.startsWith("G") || code.startsWith("I6") || code.startsWith("F") ||
+    q.includes("stroke") || q.includes("cva") || q.includes("migraine") || q.includes("headache") ||
+    q.includes("neuropathy") || q.includes("dementia") || q.includes("brain") || q.includes("seizure")
+  ) {
+    return {
+      coords: existingCoords || { x: 0.0, y: 7.2, z: 0.8 },
+      region: "Cranial Vault / Central Nervous System",
+      system: "neurologic",
+      isPosterior: false
+    };
+  }
+
+  // 8. Musculoskeletal & Joints (Knee, Hip, Spine, Lumbar, Shoulder)
+  if (
+    code.startsWith("M") || q.includes("osteoarthritis") || q.includes("arthritis") ||
+    q.includes("knee") || q.includes("hip") || q.includes("spine") || q.includes("back") || q.includes("joint")
+  ) {
+    if (q.includes("knee") || code === "M17") {
+      const isLeft = q.includes("left");
+      return {
+        coords: existingCoords || { x: isLeft ? 0.9 : -0.9, y: -4.55, z: 0.85 },
+        region: isLeft ? "Left Knee Joint / Patellofemoral" : "Right Knee Joint / Patellofemoral",
+        system: "orthopedic_knee",
+        isPosterior: false
+      };
+    }
+    if (q.includes("hip") || code === "M16") {
+      const isLeft = q.includes("left");
+      return {
+        coords: existingCoords || { x: isLeft ? 1.1 : -1.1, y: -1.2, z: 0.85 },
+        region: isLeft ? "Left Hip Joint" : "Right Hip Joint",
+        system: "orthopedic_hip",
+        isPosterior: false
+      };
+    }
+    if (q.includes("spine") || q.includes("lumbar") || q.includes("back") || code.startsWith("M5") || code.startsWith("M4")) {
+      return {
+        coords: existingCoords || { x: 0.0, y: 1.9, z: -0.9 },
+        region: "Lumbar-Sacral Spine (Posterior)",
+        system: "spine",
+        isPosterior: true
+      };
+    }
+    if (q.includes("shoulder") || code === "M75") {
+      const isLeft = q.includes("left");
+      return {
+        coords: existingCoords || { x: isLeft ? 2.3 : -2.3, y: 4.2, z: 0.5 },
+        region: isLeft ? "Left Shoulder Joint" : "Right Shoulder Joint",
+        system: "orthopedic",
+        isPosterior: false
+      };
+    }
+  }
+
+  // 9. Genitourinary / Bladder / Prostate / Pelvic
+  if (code.startsWith("N") || q.includes("bladder") || q.includes("uti") || q.includes("urinary") || q.includes("prostate")) {
+    return {
+      coords: existingCoords || { x: 0.0, y: 0.25, z: 0.85 },
+      region: "Pelvis / Genitourinary System",
+      system: "pelvic",
+      isPosterior: false
+    };
+  }
+
+  // Default: Anterior Midline Torso
+  return {
+    coords: existingCoords || { x: 0.0, y: 3.5, z: 1.0 },
+    region: "Anterior Torso / Systemic",
+    system: "general",
+    isPosterior: false
+  };
+}
+
 export const CLINICAL_CATALOG = {
-  // 20 Common Medical Conditions
+  // Common Medical Conditions
   conditions: [
+    {
+      id: "cond-pad",
+      name: "Peripheral Arterial Disease (PAD)",
+      plainName: "Poor Leg Circulation / PAD",
+      region: "Lower Extremity Arteries / Peripheral Vasculature",
+      icd10: "I73.9",
+      coords: { x: -0.95, y: -4.8, z: 0.82 },
+      system: "vascular",
+      notes: "Atherosclerotic narrowing of lower extremity native arteries causing claudication."
+    },
     {
       id: "cond-htn",
       name: "Hypertension (Essential)",

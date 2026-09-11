@@ -3,6 +3,7 @@ import { Html } from "@react-three/drei";
 import { useThree } from "@react-three/fiber";
 import * as THREE from "three";
 import { X, MapPin, Scissors, Calendar, User, Building, Activity, Edit2 } from "lucide-react";
+import { localizeConditionAnatomically } from "../../lib/clinicalCatalog";
 
 /**
  * Epic EMR Style Circular Badge Marker with Flank Callout Card & Vector Line
@@ -25,7 +26,16 @@ export function MarkerPin({
 }) {
   const { viewport } = useThree();
   const [hovered, setHovered] = useState(false);
-  const coords = item.coords || { x: 0, y: 0, z: 0 };
+
+  // Robust coordinates fallback: Dynamically localize conditions if coords missing or at default (0,0)
+  let coords = item.coords;
+  if (!coords || (coords.x === 0 && coords.y === 0)) {
+    if (type === "condition" || item.category === "condition") {
+      coords = localizeConditionAnatomically(item.name || item.title || item, item.icd10).coords;
+    } else {
+      coords = coords || { x: 0, y: 0, z: 0 };
+    }
+  }
 
   // Category determination
   let category = type;
