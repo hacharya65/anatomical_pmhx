@@ -519,13 +519,13 @@ export function Scene({
                 onPerspectiveChange("anterior");
               }
             }}
-            className={`px-2.5 py-1 text-xs rounded font-medium transition-all flex items-center gap-1.5 ${
+            className={`px-2.5 py-1 text-xs rounded font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
               perspective === "anterior"
                 ? "bg-teal-700 text-white font-semibold shadow-xs"
                 : "text-slate-500 hover:text-slate-800"
             }`}
           >
-            <span>Anterior (Front)</span>
+            <span>Front</span>
             <span
               className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                 perspective === "anterior" ? "bg-teal-800/80 text-teal-100" : "bg-slate-200 text-slate-600"
@@ -544,13 +544,13 @@ export function Scene({
                 onPerspectiveChange("posterior");
               }
             }}
-            className={`px-2.5 py-1 text-xs rounded font-medium transition-all flex items-center gap-1.5 ${
+            className={`px-2.5 py-1 text-xs rounded font-medium transition-all flex items-center gap-1.5 cursor-pointer ${
               perspective === "posterior"
                 ? "bg-teal-700 text-white font-semibold shadow-xs"
                 : "text-slate-500 hover:text-slate-800"
             }`}
           >
-            <span>Posterior (Rear)</span>
+            <span>Back</span>
             <span
               className={`px-1.5 py-0.2 rounded-full text-[10px] font-bold ${
                 perspective === "posterior" ? "bg-teal-800/80 text-teal-100" : "bg-slate-200 text-slate-600"

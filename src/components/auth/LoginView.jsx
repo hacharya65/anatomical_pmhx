@@ -9,7 +9,8 @@ import {
   AlertCircle,
   CheckCircle2,
   Stethoscope,
-  KeyRound
+  KeyRound,
+  UserCheck
 } from "lucide-react";
 import {
   supabase,
@@ -169,13 +170,13 @@ export function LoginView({ onDemoAccess, onLoginSuccess }) {
             {/* Card Header */}
             <div className="p-4 sm:p-5 border-b border-slate-100 text-center bg-gradient-to-b from-slate-50 to-white">
               <div className="w-10 h-10 mx-auto rounded-xl bg-teal-50 border border-teal-100 flex items-center justify-center text-teal-700 mb-2 shadow-xs">
-                <Stethoscope className="w-5 h-5" />
+                <UserCheck className="w-5 h-5" />
               </div>
               <h2 className="text-base font-extrabold text-slate-900">
-                Clinician Authentication
+                Patient Authentication
               </h2>
               <p className="text-xs font-medium text-slate-600 mt-0.5">
-                Hospital or medical institution portal
+                Personal 3D Medical History Portal
               </p>
 
               {/* Segmented Tab Toggle */}
@@ -251,7 +252,7 @@ export function LoginView({ onDemoAccess, onLoginSuccess }) {
               <form onSubmit={handleAuthSubmit} className="space-y-3">
                 <div>
                   <label className="block text-xs font-bold text-slate-800 mb-1">
-                    Institutional Email
+                    Email Address
                   </label>
                   <div className="relative">
                     <Mail className="w-4 h-4 text-slate-500 absolute left-3 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -259,7 +260,7 @@ export function LoginView({ onDemoAccess, onLoginSuccess }) {
                       type="email"
                       value={email}
                       onChange={(e) => setEmail(e.target.value)}
-                      placeholder="physician@hospital.org"
+                      placeholder="name@email.com"
                       className="w-full text-xs pl-9 pr-3 py-2 bg-slate-50 border border-slate-300 rounded-xl text-slate-900 placeholder:text-slate-400 focus:outline-none focus:border-teal-600 focus:bg-white focus:ring-1 focus:ring-teal-600 transition-all font-medium"
                       required
                     />
@@ -339,7 +340,7 @@ export function LoginView({ onDemoAccess, onLoginSuccess }) {
                     <span>Authenticating...</span>
                   ) : (
                     <>
-                      <span>{isSignUp ? "Register Clinician Account" : "Sign In to EMR"}</span>
+                      <span>{isSignUp ? "Create Patient Account" : "Sign In to Medical History"}</span>
                       <ArrowRight className="w-4 h-4" />
                     </>
                   )}

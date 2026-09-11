@@ -101,7 +101,7 @@ export function SurgeryList({
                                 : "bg-teal-50 text-teal-800 border-teal-200"
                             }`}
                           >
-                            {isItemRelevantForPerspective(surg, "posterior") ? "Posterior" : "Anterior"}
+                            {isItemRelevantForPerspective(surg, "posterior") ? "Back" : "Front"}
                           </span>
                         </div>
                         {surg.incision && (

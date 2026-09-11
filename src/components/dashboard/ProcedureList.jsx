@@ -147,7 +147,7 @@ export function ProcedureList({
                                 : "bg-teal-50 text-teal-800 border-teal-200"
                             }`}
                           >
-                            {isItemRelevantForPerspective(proc, "posterior") ? "Posterior" : "Anterior"}
+                            {isItemRelevantForPerspective(proc, "posterior") ? "Back" : "Front"}
                           </span>
                         </div>
                       </div>

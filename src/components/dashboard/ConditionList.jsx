@@ -105,7 +105,7 @@ export function ConditionList({
                                 : "bg-teal-50 text-teal-800 border-teal-200"
                             }`}
                           >
-                            {isItemRelevantForPerspective(cond, "posterior") ? "Posterior" : "Anterior"}
+                            {isItemRelevantForPerspective(cond, "posterior") ? "Back" : "Front"}
                           </span>
                         </div>
                         <div className="flex items-center gap-2 mt-1">

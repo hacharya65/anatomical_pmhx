@@ -116,7 +116,7 @@ export function Header({
         </div>
 
         {/* Expanded Global Clinical Search Bar */}
-        <div id="tour-search-bar" className="relative flex-1 min-w-[240px]">
+        <div id="tour-search-bar" className="relative flex-1 min-w-[180px] max-w-xl">
           <Search className="w-4 h-4 absolute left-3.5 top-1/2 transform -translate-y-1/2 text-slate-400 pointer-events-none" />
           <input
             type="text"
@@ -148,12 +148,11 @@ export function Header({
           id="tour-help-button"
           type="button"
           onClick={onOpenHelp}
-          className="flex items-center gap-1.5 text-xs font-semibold px-2.5 py-1.5 rounded-lg border shadow-xs transition-all bg-white border-slate-300 text-slate-700 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-300"
-          title="Clinical Help & FAQ (Shortcuts & Interactive Tour)"
+          className="w-9 h-9 flex items-center justify-center rounded-lg border shadow-xs transition-all bg-white border-slate-300 text-teal-700 hover:bg-teal-50 hover:text-teal-800 hover:border-teal-300 cursor-pointer shrink-0"
+          title="Help & FAQ (Shortcuts & Interactive Tour)"
           aria-label="Help and FAQ"
         >
           <HelpCircle className="w-4 h-4 text-teal-700" />
-          <span className="hidden sm:inline">Help & FAQ</span>
         </button>
 
         {/* User / Demo Status Pill */}
