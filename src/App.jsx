@@ -568,6 +568,8 @@ export default function App() {
         type={modalItemState.type}
         item={modalItemState.item}
         onSave={handleSaveModalItem}
+        existingConditions={patientData.conditions || []}
+        onAddNewCondition={addCondition}
       />
 
       {/* Clinical Help & FAQ Knowledge Base Modal */}

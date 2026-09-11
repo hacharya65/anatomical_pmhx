@@ -102,6 +102,17 @@ export const TOUR_STEPS = [
     content:
       "Access all 6 clinical domains: Lines, Drains, Surgeries, Conditions, Meds, and Patient Summary. Click any record card to focus and highlight it in 3D. Add new LDAs with the '+ Add' button or shortcut Alt+Shift+N.",
     highlightText: "Badge numbers live-update as items are added, resolved, or filtered by search."
+  },
+  {
+    id: "federal-apis",
+    title: "Federal Health APIs & RxNorm Standard Dosing",
+    badge: "Open-Access Health Data",
+    icon: Sparkles,
+    target: null,
+    placement: "center",
+    content:
+      "The workstation connects directly to open-access federal health APIs: NIH RxNorm provides live medication search with 1-click standardized dosage strengths and frequency recommendations; NLM CTSS searches official ICD-10 diagnoses; MedlinePlus delivers authoritative monographs; and CDC CVX tracks standardized immunization schedules.",
+    highlightText: "Tip: When adding a medication, click any NIH RxNorm standard strength chip to instantly set the dosage and recommended frequency."
   }
 ];
 
