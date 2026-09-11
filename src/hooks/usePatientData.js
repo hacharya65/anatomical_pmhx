@@ -52,32 +52,31 @@ export function usePatientData() {
   const [syncStatus, setSyncStatus] = useState("local"); // 'local' | 'synced' | 'syncing' | 'error'
   const [isNewPatient, setIsNewPatient] = useState(false);
 
-  // Initialize state: defaults to Elena Vance demo for guest mode
+  // Initialize state: defaults to fresh Elena Vance demo for unauthenticated / demo mode.
+  // We explicitly do NOT read mutated guest data from localStorage so that refreshing
+  // resets the demo patient back to pristine Elena Vance.
   const [patientData, setPatientData] = useState(() => {
-    try {
-      const savedGuest = localStorage.getItem(GUEST_STORAGE_KEY);
-      if (savedGuest) {
-        const parsed = JSON.parse(savedGuest);
-        return parsed;
-      }
-    } catch (e) {
-      console.warn("Failed to load local guest demo data:", e);
-    }
     return JSON.parse(JSON.stringify(DEFAULT_PATIENT_RECORD));
   });
 
-  // Save to user-specific or guest local storage on any state change
+  // Save to user-specific local storage on any state change ONLY when authenticated!
+  // In demo mode, changes remain in-memory for the active session, so refreshing always restores Elena Vance.
   useEffect(() => {
     try {
       if (user?.id) {
         localStorage.setItem(getUserStorageKey(user.id), JSON.stringify(patientData));
-      } else {
-        localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(patientData));
       }
     } catch (e) {
       console.warn("Failed to persist patient data locally:", e);
     }
   }, [patientData, user]);
+
+  // Clear any legacy guest storage on mount to guarantee fresh session
+  useEffect(() => {
+    try {
+      localStorage.removeItem(GUEST_STORAGE_KEY);
+    } catch (_) {}
+  }, []);
 
   // Remote data fetcher: queries Supabase and isolates user data
   const fetchRemoteData = useCallback(async (userId, currentUser) => {
@@ -885,6 +884,75 @@ export function usePatientData() {
 
   // Batch commit onboarding data (from Intake Wizard or PDF Import)
   const batchCommitOnboardingData = useCallback(async (payload) => {
+    if (!payload) return;
+
+    if (!user) {
+      // DEMO PATIENT / EXPLORATION MODE (Unauthenticated):
+      // Retain ALL prior information (conditions, surgeries, medications, drains, lines, procedures, vaccines)
+      // and append / merge any new additions in-memory without overwriting the baseline.
+      const existingConds = patientData.conditions || [];
+      const incomingConds = payload.conditions || [];
+      const mergedConds = [
+        ...existingConds,
+        ...incomingConds.filter(nc => !existingConds.some(ec => ec.id === nc.id || (nc.name && ec.name && nc.name.toLowerCase() === ec.name.toLowerCase())))
+      ];
+
+      const existingSurgs = patientData.surgeries || [];
+      const incomingSurgs = payload.surgeries || [];
+      const mergedSurgs = [
+        ...existingSurgs,
+        ...incomingSurgs.filter(ns => !existingSurgs.some(es => es.id === ns.id || (ns.name && es.name && ns.name.toLowerCase() === es.name.toLowerCase())))
+      ];
+
+      const existingMeds = patientData.medications || [];
+      const incomingMeds = payload.medications || [];
+      const mergedMeds = [
+        ...existingMeds,
+        ...incomingMeds.filter(nm => !existingMeds.some(em => em.id === nm.id || (nm.name && em.name && nm.name.toLowerCase() === em.name.toLowerCase())))
+      ];
+
+      const existingProcs = patientData.procedures || [];
+      const incomingProcs = payload.procedures || [];
+      const mergedProcs = [
+        ...existingProcs,
+        ...incomingProcs.filter(np => !existingProcs.some(ep => ep.id === np.id || ((np.procedure_name || np.name) && (ep.procedure_name || ep.name) && (np.procedure_name || np.name).toLowerCase() === (ep.procedure_name || ep.name).toLowerCase())))
+      ];
+
+      const existingVax = patientData.vaccinations || [];
+      const incomingVax = payload.vaccinations || [];
+      const mergedVax = [
+        ...existingVax,
+        ...incomingVax.filter(nv => !existingVax.some(ev => ev.id === nv.id || ((nv.vaccine_name || nv.name) && (ev.vaccine_name || ev.name) && (nv.vaccine_name || nv.name).toLowerCase() === (ev.vaccine_name || ev.name).toLowerCase())))
+      ];
+
+      const existingAllergies = patientData.allergiesList || [];
+      const incomingAllergies = payload.allergiesList || [];
+      const mergedAllergies = [
+        ...existingAllergies,
+        ...incomingAllergies.filter(na => !existingAllergies.some(ea => ea.id === na.id || (na.medication && ea.medication && na.medication.toLowerCase() === ea.medication.toLowerCase())))
+      ];
+
+      const updated = {
+        ...patientData,
+        profile: {
+          ...patientData.profile,
+          ...(payload.profile?.name && payload.profile.name !== "Elena Vance" ? payload.profile : {})
+        },
+        allergiesList: mergedAllergies,
+        conditions: mergedConds,
+        surgeries: mergedSurgs,
+        medications: mergedMeds,
+        procedures: mergedProcs,
+        vaccinations: mergedVax,
+        drains: patientData.drains || [],
+        lines: patientData.lines || []
+      };
+
+      setPatientData(updated);
+      setIsNewPatient(false);
+      return;
+    }
+
     const newAllergiesList = payload.allergiesList !== undefined
       ? payload.allergiesList
       : (patientData.allergiesList || []);
@@ -1112,7 +1180,7 @@ export function usePatientData() {
     setPatientData(defaultData);
     setIsNewPatient(false);
     try {
-      localStorage.setItem(GUEST_STORAGE_KEY, JSON.stringify(defaultData));
+      localStorage.removeItem(GUEST_STORAGE_KEY);
       localStorage.setItem("pmhx_demo_mode", "true");
     } catch (_) {}
   }, []);

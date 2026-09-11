@@ -1,6 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { X, Sparkles } from "lucide-react";
+import { X, Sparkles, ShieldCheck } from "lucide-react";
 import { CLINICAL_CATALOG } from "../../lib/clinicalCatalog";
+import { searchMedications, getMedicationStrengths } from "../../services/rxnorm.js";
+import { searchConditions } from "../../services/ctss.js";
 
 export function AddEditItemModal({
   isOpen,
@@ -12,6 +14,8 @@ export function AddEditItemModal({
   const [formData, setFormData] = useState({});
   const [suggestions, setSuggestions] = useState([]);
   const [showSuggestions, setShowSuggestions] = useState(false);
+  const [availableStrengths, setAvailableStrengths] = useState([]);
+  const [isSearchingApi, setIsSearchingApi] = useState(false);
 
   useEffect(() => {
     if (item) {
@@ -103,7 +107,7 @@ export function AddEditItemModal({
 
   if (!isOpen) return null;
 
-  // Autocomplete matching against catalog
+  // Autocomplete matching against catalog & Federal APIs
   const handleNameChange = (val) => {
     setFormData((prev) => ({
       ...prev,
@@ -113,20 +117,74 @@ export function AddEditItemModal({
     }));
 
     if (val.length >= 2) {
-      let matches = [];
+      if (type === "medication") {
+        setIsSearchingApi(true);
+        searchMedications(val).then((rxResults) => {
+          if (rxResults && rxResults.length > 0) {
+            setSuggestions(rxResults.map(r => ({
+              id: `rx-${r.rxcui || r.name}`,
+              name: r.name,
+              rxcui: r.rxcui,
+              synonym: r.synonym,
+              isRxNorm: true
+            })));
+            setShowSuggestions(true);
+          } else {
+            const matches = CLINICAL_CATALOG.medications.filter((m) =>
+              m.name.toLowerCase().includes(val.toLowerCase())
+            );
+            setSuggestions(matches);
+            setShowSuggestions(matches.length > 0);
+          }
+          setIsSearchingApi(false);
+        }).catch(() => {
+          const matches = CLINICAL_CATALOG.medications.filter((m) =>
+            m.name.toLowerCase().includes(val.toLowerCase())
+          );
+          setSuggestions(matches);
+          setShowSuggestions(matches.length > 0);
+          setIsSearchingApi(false);
+        });
+        return;
+      }
+
       if (type === "condition") {
-        matches = CLINICAL_CATALOG.conditions.filter((c) =>
-          c.name.toLowerCase().includes(val.toLowerCase()) ||
-          (c.plainName && c.plainName.toLowerCase().includes(val.toLowerCase()))
-        );
-      } else if (type === "surgery") {
+        setIsSearchingApi(true);
+        searchConditions(val).then((ctssResults) => {
+          if (ctssResults && ctssResults.length > 0) {
+            setSuggestions(ctssResults.map(c => ({
+              id: `ctss-${c.icd10 || c.name}`,
+              name: c.name,
+              icd10: c.icd10,
+              isCtss: true
+            })));
+            setShowSuggestions(true);
+          } else {
+            const matches = CLINICAL_CATALOG.conditions.filter((c) =>
+              c.name.toLowerCase().includes(val.toLowerCase()) ||
+              (c.plainName && c.plainName.toLowerCase().includes(val.toLowerCase()))
+            );
+            setSuggestions(matches);
+            setShowSuggestions(matches.length > 0);
+          }
+          setIsSearchingApi(false);
+        }).catch(() => {
+          const matches = CLINICAL_CATALOG.conditions.filter((c) =>
+            c.name.toLowerCase().includes(val.toLowerCase()) ||
+            (c.plainName && c.plainName.toLowerCase().includes(val.toLowerCase()))
+          );
+          setSuggestions(matches);
+          setShowSuggestions(matches.length > 0);
+          setIsSearchingApi(false);
+        });
+        return;
+      }
+
+      let matches = [];
+      if (type === "surgery") {
         matches = CLINICAL_CATALOG.surgeries.filter((s) =>
           s.name.toLowerCase().includes(val.toLowerCase()) ||
           (s.plainName && s.plainName.toLowerCase().includes(val.toLowerCase()))
-        );
-      } else if (type === "medication") {
-        matches = CLINICAL_CATALOG.medications.filter((m) =>
-          m.name.toLowerCase().includes(val.toLowerCase())
         );
       } else if (type === "procedure") {
         matches = (CLINICAL_CATALOG.procedures || []).filter((p) =>
@@ -152,11 +210,24 @@ export function AddEditItemModal({
       ...prev,
       ...catItem,
       name: catItem.name,
+      rxcui: catItem.rxcui || prev.rxcui,
+      icd10: catItem.icd10 || prev.icd10,
       id: prev.id || undefined,
       ...(type === "vaccine" ? { vaccine_name: catItem.name } : {}),
       ...(type === "procedure" ? { procedure_name: catItem.name, anatomical_marker: catItem.anatomical_marker, recall_interval_years: catItem.defaultRecallYears } : {})
     }));
     setShowSuggestions(false);
+
+    if (type === "medication") {
+      getMedicationStrengths(catItem.rxcui, catItem.name).then((strengthInfo) => {
+        if (strengthInfo?.strengths?.length > 0) {
+          setAvailableStrengths(strengthInfo.strengths);
+          if (!formData.dosage) {
+            setFormData((prev) => ({ ...prev, dosage: strengthInfo.strengths[0] }));
+          }
+        }
+      }).catch(() => {});
+    }
   };
 
   const handleSubmit = (e) => {
@@ -223,22 +294,49 @@ export function AddEditItemModal({
 
             {/* Suggestions */}
             {showSuggestions && suggestions.length > 0 && (
-              <div className="absolute left-0 right-0 top-full mt-1 bg-slate-950 border border-sky-500/40 rounded-xl shadow-2xl max-h-48 overflow-y-auto z-50">
-                <div className="p-1.5 text-[10px] text-sky-400 font-semibold uppercase tracking-wider flex items-center gap-1">
-                  <Sparkles className="w-3 h-3" />
-                  <span>Clinical Catalog Matches</span>
+              <div className="absolute left-0 right-0 top-full mt-1 bg-slate-950 border border-teal-500/40 rounded-xl shadow-2xl max-h-56 overflow-y-auto z-50">
+                <div className="p-2 text-[10px] text-teal-400 font-bold uppercase tracking-wider flex items-center justify-between border-b border-slate-800/80">
+                  <div className="flex items-center gap-1.5">
+                    <Sparkles className="w-3 h-3 text-teal-400" />
+                    <span>
+                      {type === "medication"
+                        ? "NIH RxNorm Live Drug Database"
+                        : type === "condition"
+                        ? "NLM CTSS Standardized ICD-10"
+                        : "Clinical Catalog Matches"}
+                    </span>
+                  </div>
+                  {isSearchingApi && (
+                    <div className="w-3 h-3 border-2 border-teal-400 border-t-transparent rounded-full animate-spin" />
+                  )}
                 </div>
                 {suggestions.map((sug) => (
                   <button
-                    key={sug.id}
+                    key={sug.id || sug.name}
                     type="button"
                     onClick={() => handleSelectSuggestion(sug)}
-                    className="w-full text-left p-2 hover:bg-slate-800/80 transition-all text-xs text-slate-200 flex items-center justify-between border-t border-slate-800/60"
+                    className="w-full text-left p-2.5 hover:bg-slate-800/80 transition-all text-xs text-slate-200 flex items-center justify-between border-t border-slate-800/60 first:border-t-0"
                   >
                     <div>
-                      <div className="font-medium text-white">{sug.name}</div>
-                      <div className="text-[10px] text-slate-400">{sug.region || sug.site || sug.indication}</div>
+                      <div className="font-semibold text-white">{sug.name}</div>
+                      <div className="text-[10px] text-slate-400">
+                        {sug.rxcui
+                          ? `RxCUI: ${sug.rxcui}`
+                          : sug.icd10
+                          ? `ICD-10-CM: ${sug.icd10}`
+                          : sug.region || sug.site || sug.indication}
+                      </div>
                     </div>
+                    {sug.isRxNorm && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-teal-900/60 text-teal-300 border border-teal-700/60 shrink-0">
+                        RxNorm
+                      </span>
+                    )}
+                    {sug.isCtss && (
+                      <span className="text-[10px] font-bold px-1.5 py-0.5 rounded bg-sky-900/60 text-sky-300 border border-sky-700/60 shrink-0">
+                        ICD-10
+                      </span>
+                    )}
                   </button>
                 ))}
               </div>
@@ -416,6 +514,31 @@ export function AddEditItemModal({
           {/* Medication Fields */}
           {type === "medication" && (
             <>
+              {availableStrengths.length > 0 && (
+                <div>
+                  <label className="block text-[10px] font-bold text-teal-400 mb-1.5 uppercase tracking-wider flex items-center gap-1">
+                    <Sparkles className="w-3 h-3 text-teal-400" />
+                    <span>NIH RxNorm Standard Strengths</span>
+                  </label>
+                  <div className="flex flex-wrap gap-1.5 mb-3">
+                    {availableStrengths.map((str) => (
+                      <button
+                        key={str}
+                        type="button"
+                        onClick={() => setFormData((prev) => ({ ...prev, dosage: str }))}
+                        className={`text-xs px-2.5 py-1 rounded-md border font-medium transition-all ${
+                          formData.dosage === str
+                            ? "bg-teal-600 text-white border-teal-500 shadow-sm"
+                            : "bg-slate-950 text-slate-300 border-slate-800 hover:border-teal-500 hover:text-white"
+                        }`}
+                      >
+                        {str}
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
               <div className="grid grid-cols-2 gap-3">
                 <div>
                   <label className="block text-xs font-medium text-slate-300 mb-1">Dosage</label>
